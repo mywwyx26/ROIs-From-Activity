@@ -20,7 +20,7 @@ def gaussian_blur_video(array, sigma=1): # time: 3.6s for sigma=1, 6.8s for sigm
     return blurred_array
 
 # cross corr images function from https://labrigger.com/blog/2013/06/13/local-cross-corr-images/
-# very slow so try to find or make a better one
+# very slow so try to find or make a better one (w=1 takes 60s, w=2 takes 87s, w=3 takes 117s, w=4 takes 163s)
 def cross_corr_image(tc, w=1):
     num_frames, xmax, ymax = tc.shape
     ccimage = np.zeros((xmax, ymax))
@@ -56,35 +56,17 @@ def cross_corr_image(tc, w=1):
 
     return ccimage
 
+# the one that looked best was sigma = 1 and w = 3
 blurred_data1 = gaussian_blur_video(data, sigma=1)
-blurred_data3 = gaussian_blur_video(data, sigma=3)
-blurred_data5 = gaussian_blur_video(data, sigma=5)
+cross_corr_image1 = cross_corr_image(blurred_data1, w=3)
 
-'''
-viewer = napari.Viewer()
-viewer.add_image(data, name='original')
-viewer.add_image(blurred_data1, name='gaussian blur sigma=1')
-viewer.add_image(blurred_data3, name='gaussian blur sigma=3')
-viewer.add_image(blurred_data5, name='gaussian blur sigma=5')
-napari.run()
-'''
+mean1, stdev1 = np.mean(cross_corr_image1), np.std(cross_corr_image1)
+binarized1 = np.where(cross_corr_image1 > mean1 + stdev1, 1, 0)
 
-start_time = time.time()
-cc_image = cross_corr_image(data, w=1)
-end_time = time.time()
-print(f"Cross corr w=1: {end_time - start_time} seconds")
+# plot just to compare and eyeball it
+plt.subplot(1, 2, 1)
+plt.imshow(cross_corr_image1, cmap='gray')
+plt.subplot(1, 2, 2)
+plt.imshow(binarized1, cmap='gray')
+plt.show()
 
-start_time = time.time()
-cc_image = cross_corr_image(data, w=2)
-end_time = time.time()
-print(f"Cross corr w=2: {end_time - start_time} seconds")
-
-start_time = time.time()
-cc_image = cross_corr_image(data, w=3)
-end_time = time.time()
-print(f"Cross corr w=3: {end_time - start_time} seconds")
-
-start_time = time.time()
-cc_image = cross_corr_image(data, w=4)
-end_time = time.time()
-print(f"Cross corr w=4: {end_time - start_time} seconds")

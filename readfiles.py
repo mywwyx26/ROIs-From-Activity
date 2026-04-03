@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import tifffile
 import napari
 import time
-from scipy.ndimage import gaussian_filter
+from scipy import ndimage
 
 # each array is just a bunch of numbers in the dimensions of (time, x, y)
 data = tifffile.imread("TSeries-12232025-1359-444_Cycle00001_frames2883to4482_reg.tif")
@@ -16,7 +16,7 @@ def gaussian_blur_video(array, sigma=1): # time: 3.6s for sigma=1, 6.8s for sigm
 
     # apply gaussian filter to each frame
     for i in range(array.shape[0]):
-        blurred_array[i, :, :] = gaussian_filter(array[i, :, :], sigma=sigma)
+        blurred_array[i, :, :] = ndimage.gaussian_filter(array[i, :, :], sigma=sigma)
     return blurred_array
 
 # cross corr images function from https://labrigger.com/blog/2013/06/13/local-cross-corr-images/
@@ -62,11 +62,48 @@ cross_corr_image1 = cross_corr_image(blurred_data1, w=3)
 
 mean1, stdev1 = np.mean(cross_corr_image1), np.std(cross_corr_image1)
 binarized1 = np.where(cross_corr_image1 > mean1 + stdev1, 1, 0)
+labeled_array, num_features = ndimage.label(binarized1)
+sizes = ndimage.sum(binarized1, labeled_array, range(num_features + 1))
 
-# plot just to compare and eyeball it
-plt.subplot(1, 2, 1)
+
+# plot 1: mean, stev, cross corr, binarized, for reference
+plt.figure(1)
+plt.subplot(2, 2, 1)
+plt.imshow(np.mean(data, axis=0), cmap='gray')
+plt.subplot(2, 2, 2)
+plt.imshow(np.std(data, axis=0), cmap='gray')
+plt.subplot(2, 2, 3)
 plt.imshow(cross_corr_image1, cmap='gray')
-plt.subplot(1, 2, 2)
+plt.subplot(2, 2, 4)
 plt.imshow(binarized1, cmap='gray')
+
+# plot 2: labeled array + removed smallest rois
+plt.figure(2)
+plt.subplot(2, 2, 1)
+plt.imshow(labeled_array, cmap='rainbow')
+
+mask = sizes < 20
+remove_pixel = mask[labeled_array]
+labeled_array[remove_pixel] = 0
+plt.subplot(2, 2, 2)
+plt.imshow(labeled_array, cmap='rainbow')
+
+mask = sizes < 30
+remove_pixel = mask[labeled_array]
+labeled_array[remove_pixel] = 0
+plt.subplot(2, 2, 3)
+plt.imshow(labeled_array, cmap='rainbow')
+
+mask = sizes < 40
+remove_pixel = mask[labeled_array]
+labeled_array[remove_pixel] = 0
+plt.subplot(2, 2, 4)
+plt.imshow(labeled_array, cmap='rainbow')
+
+# plot 3: histogram of sizes
+plt.figure(3)
+plt.hist(sizes[1:], bins=400)
+
 plt.show()
+
 

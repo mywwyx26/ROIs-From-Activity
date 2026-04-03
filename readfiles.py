@@ -60,11 +60,31 @@ def cross_corr_image(tc, w=1):
 blurred_data1 = gaussian_blur_video(data, sigma=1)
 cross_corr_image1 = cross_corr_image(blurred_data1, w=3)
 
+# binarize cross corr image
 mean1, stdev1 = np.mean(cross_corr_image1), np.std(cross_corr_image1)
 binarized1 = np.where(cross_corr_image1 > mean1 + stdev1, 1, 0)
 labeled_array, num_features = ndimage.label(binarized1)
 sizes = ndimage.sum(binarized1, labeled_array, range(num_features + 1))
+mask = sizes < 30 # threshold for getting rid of small rois, 72 features remain
+remove_pixel = mask[labeled_array]
+labeled_array[remove_pixel] = 0
 
+# update the image again and reorder the labels by size
+labeled_array, num_features = ndimage.label(labeled_array)
+label_indices = np.arange(1, num_features + 1)
+sizes = ndimage.sum(binarized1, labeled_array, label_indices)
+sorted_indices = np.argsort(sizes)[::-1]
+ranked_labels = label_indices[sorted_indices]
+map_array = np.zeros(num_features + 1, dtype=int)
+for i, old_label in enumerate(ranked_labels):
+    map_array[old_label] = i + 1
+sorted_labeled_mask = map_array[labeled_array]
+
+# get median fluorescence per time for each roi
+medians = np.zeros((7,data.shape[0]))
+for i in range(7):
+    for j in range(data.shape[0]):
+        medians[i, j] = ndimage.median(data[j], labels=sorted_labeled_mask, index=i+1)
 
 # plot 1: mean, stev, cross corr, binarized, for reference
 plt.figure(1)
@@ -77,32 +97,26 @@ plt.imshow(cross_corr_image1, cmap='gray')
 plt.subplot(2, 2, 4)
 plt.imshow(binarized1, cmap='gray')
 
-# plot 2: labeled array + removed smallest rois
+# plot 2: labels reordered by size
 plt.figure(2)
-plt.subplot(2, 2, 1)
-plt.imshow(labeled_array, cmap='rainbow')
+plt.imshow(sorted_labeled_mask, cmap='nipy_spectral')
 
-mask = sizes < 20
-remove_pixel = mask[labeled_array]
-labeled_array[remove_pixel] = 0
-plt.subplot(2, 2, 2)
-plt.imshow(labeled_array, cmap='rainbow')
-
-mask = sizes < 30
-remove_pixel = mask[labeled_array]
-labeled_array[remove_pixel] = 0
-plt.subplot(2, 2, 3)
-plt.imshow(labeled_array, cmap='rainbow')
-
-mask = sizes < 40
-remove_pixel = mask[labeled_array]
-labeled_array[remove_pixel] = 0
-plt.subplot(2, 2, 4)
-plt.imshow(labeled_array, cmap='rainbow')
-
-# plot 3: histogram of sizes
+# plot 3: median fluorescence per time for each roi
 plt.figure(3)
-plt.hist(sizes[1:], bins=400)
+plt.subplot(7,1,1)
+plt.plot(medians[0])
+plt.subplot(7,1,2)
+plt.plot(medians[1])
+plt.subplot(7,1,3)
+plt.plot(medians[2])
+plt.subplot(7,1,4)
+plt.plot(medians[3])
+plt.subplot(7,1,5)
+plt.plot(medians[4])
+plt.subplot(7,1,6)
+plt.plot(medians[5])
+plt.subplot(7,1,7)
+plt.plot(medians[6])
 
 plt.show()
 

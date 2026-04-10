@@ -52,11 +52,7 @@ plt.imshow(binarized1, cmap='gray')
 
 # plot 2: labels reordered by size
 plt.figure(2)
-plt.subplot(2, 2, 1)
 plt.imshow(labeled_array, cmap='nipy_spectral')
-plt.subplot(2, 2, 2)
-plt.imshow(corrcoef_matrix, cmap='Spectral')
-plt.subplot(2, 2, 3)
 
 # plot 3: big labeled diagram of cross corr
 plt.figure(3)
@@ -70,22 +66,132 @@ plt.colorbar()
 
 # plot 4: grouping a bunch together MANUALLY RIP
 plt.figure(4)
-group1 = [18,27,35,17,51,50,26,43]
-plt.subplot(3, 1, 1)
+group1 = [9,7,45,40,42,1,24,2,8,19]
+plt.subplot(9, 1, 1)
 for i in group1:
     plt.plot(deltaf[i-1], label=f'ROI {i}')
 plt.legend()
 
-group2 = [4,6,10,15,16,38,12,47]
-plt.subplot(3, 1, 2)
+group2 = [49,14,33,36,44,34,52,5,28,30,39,41]
+plt.subplot(9, 1, 2)
 for i in group2:
     plt.plot(deltaf[i-1], label=f'ROI {i}')
 plt.legend()
 
-group3 = [9,7,45,40,42,1,24,2,8,19]
-plt.subplot(3, 1, 3)
+group3 = [18,27,35,17,51,50,26,43]
+plt.subplot(9, 1, 3)
 for i in group3:
     plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+group4 = [54,46,53]
+plt.subplot(9, 1, 4)
+for i in group4:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+group5 = [4,6,10,15,16,38,12,47]
+plt.subplot(9, 1, 5)
+for i in group5:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+group6 = [20,25,29]
+plt.subplot(9, 1, 6)
+for i in group6:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+group7 = [31,32,37]
+plt.subplot(9, 1, 7)
+for i in group7:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+group8 = [11,22,48]
+plt.subplot(9, 1, 8)
+for i in group8:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+group9 = [3,13,21]
+plt.subplot(9, 1, 9)
+for i in group9:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+# plot 5: eyeballing which groups might belong together
+plt.figure(5)
+concat1 = group6+group9
+plt.subplot(7, 1, 1)
+for i in concat1:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+concat2 = group7+group8
+plt.subplot(7, 1, 2)
+for i in concat2:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+concat3 = [25,29,21,20]
+plt.subplot(7, 1, 3)
+for i in concat3:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+concat4 = [49,14,36,44,34,52,33]
+plt.subplot(7, 1, 4)
+for i in concat4:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+concat4 = [5,30,39,41,28]
+plt.subplot(7, 1, 5)
+for i in concat4:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+concat4 = [28,33]
+plt.subplot(7, 1, 6)
+for i in concat4:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+concat4 = [3,48]
+plt.subplot(7, 1, 7)
+for i in concat4:
+    plt.plot(deltaf[i-1], label=f'ROI {i}')
+plt.legend()
+
+# plot 6: final groupings, averaged
+group1 = [9,7,45,40,42,1,24,2,8,19]
+group2 = [49,14,33,36,44,34,52,5,28,30,39,41]
+group3 = [18,27,35,17,51,50,26,43]
+group4 = [4,6,10,15,16,38,12,47]
+group5 = [20,25,29,21]
+
+avg1 = np.mean([deltaf[i-1] for i in group1], axis=0)
+avg2 = np.mean([deltaf[i-1] for i in group2], axis=0)
+avg3 = np.mean([deltaf[i-1] for i in group3], axis=0)
+avg4 = np.mean([deltaf[i-1] for i in group4], axis=0)
+avg5 = np.mean([deltaf[i-1] for i in group5], axis=0)
+
+plt.figure(6)
+plt.subplot(5, 1, 1)
+plt.plot(avg1, label='Group 1')
+plt.legend()
+plt.subplot(5, 1, 2)
+plt.plot(avg2, label='Group 2')
+plt.legend()
+plt.subplot(5, 1, 3)
+plt.plot(avg3, label='Group 3')
+plt.legend()
+plt.subplot(5, 1, 4)
+plt.plot(avg4, label='Group 4')
+plt.legend()
+plt.subplot(5, 1, 5)
+plt.plot(avg5, label='Group 5')
 plt.legend()
 
 plt.show()

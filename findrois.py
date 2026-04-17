@@ -7,6 +7,7 @@ from scipy import ndimage
 from scipy.cluster.hierarchy import linkage, leaves_list
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
 # load in np arrays
@@ -42,9 +43,10 @@ cluster_order = leaves_list(linkage_matrix)  # new ordering of ROI indices
 deltaf_reordered = deltaf[cluster_order]
 corrcoef_reordered = np.corrcoef(deltaf_reordered)
 
-f = 1 # count up figures and comment out plots
+f = 0 # count up figures and comment out plots
 '''
 # mean, stev, cross corr, binarized, for reference
+f = f + 1
 plt.figure(f)
 plt.subplot(2, 2, 1)
 plt.imshow(np.mean(data, axis=0), cmap='gray')
@@ -108,29 +110,37 @@ f = f + 1
 plt.figure(f)
 plt.imshow(group_colors)  # black background since unfilled pixels stay at 0
 
-for i in range(5, 10):
-    # next few plots: attempt pca and kmeans to do grouping instead of manually
-    scaler = StandardScaler().fit_transform(corrcoef_matrix)
-    pca = PCA(n_components=10)
-    pca_result = pca.fit_transform(scaler)
-    kmeans = KMeans(n_clusters=i, init="k-means++", n_init=10, random_state=42)
-    cluster_labels = kmeans.fit_predict(pca_result)
+# attempt pca and kmeans to do grouping instead of manually
+scaler = StandardScaler().fit_transform(corrcoef_matrix)
+pca = PCA(n_components=10)
+pca_result = pca.fit_transform(scaler)
+kmeans = KMeans(n_clusters=6, init="k-means++", n_init=10, random_state=42)
+cluster_labels = kmeans.fit_predict(pca_result)
+score = silhouette_score(pca_result, cluster_labels)
+print(f'k={6}, silhouette score={score}')
 
-    # the actual plotting part (claude coded)
-    n_clusters = i
-    f = f + 1
-    plt.figure(f, figsize=(12, 10))
-    for cluster_idx in range(n_clusters):
-        roi_indices = np.where(cluster_labels == cluster_idx)[0]  # 0-based ROI indices
-        plt.subplot(n_clusters, 1, cluster_idx + 1)
-        if len(roi_indices) > 0:
-            avg_trace = np.mean(deltaf[roi_indices], axis=0)
-            plt.plot(avg_trace, color=plt.cm.tab10(cluster_idx), linewidth=1.5)
-            plt.ylabel(f'C{cluster_idx+1}\n(n={len(roi_indices)})', fontsize=7, rotation=0, labelpad=35)
-        plt.tick_params(labelbottom=(cluster_idx == n_clusters - 1))  # x labels on bottom plot only
+# the actual plotting part (claude coded)
+n_clusters = 6 # silhouette score shows this is best (i also personally thought it looked best)
+f = f + 1
+plt.figure(f, figsize=(12, 10))
+for cluster_idx in range(n_clusters):
+    roi_indices = np.where(cluster_labels == cluster_idx)[0]  # 0-based
+    plt.subplot(n_clusters, 1, cluster_idx + 1)
+    for roi_idx in roi_indices:
+        plt.plot(deltaf[roi_idx], linewidth=0.8, label=f'ROI {roi_idx + 1}')  # +1 for 1-based
+    plt.legend(fontsize=6, ncol=4, loc='upper right')
+    plt.ylabel(f'C{cluster_idx+1}\n(n={len(roi_indices)})', fontsize=7, rotation=0, labelpad=35)
+    plt.tick_params(labelbottom=(cluster_idx == n_clusters - 1))
 
-    plt.suptitle('KMeans Cluster Average Traces (PCA-based)', fontsize=11)
-    plt.xlabel('Frame')
-    plt.tight_layout()
+# average traces of each cluster
+plt.figure(7, figsize=(12, 10))
+for cluster_idx in range(n_clusters):
+    roi_indices = np.where(cluster_labels == cluster_idx)[0]  # 0-based ROI indices
+    plt.subplot(n_clusters, 1, cluster_idx + 1)
+    if len(roi_indices) > 0:
+        avg_trace = np.mean(deltaf[roi_indices], axis=0)
+        plt.plot(avg_trace, color=plt.cm.tab10(cluster_idx), linewidth=1.5)
+        plt.ylabel(f'C{cluster_idx+1}\n(n={len(roi_indices)})', fontsize=7, rotation=0, labelpad=35)
+    plt.tick_params(labelbottom=(cluster_idx == n_clusters - 1))
 
 plt.show()

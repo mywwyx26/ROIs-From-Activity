@@ -44,24 +44,7 @@ deltaf_reordered = deltaf[cluster_order]
 corrcoef_reordered = np.corrcoef(deltaf_reordered)
 
 f = 0 # count up figures and comment out plots
-'''
-# mean, stev, cross corr, binarized, for reference
-f = f + 1
-plt.figure(f)
-plt.subplot(2, 2, 1)
-plt.imshow(np.mean(data, axis=0), cmap='gray')
-plt.subplot(2, 2, 2)
-plt.imshow(np.std(data, axis=0), cmap='gray')
-plt.subplot(2, 2, 3)
-plt.imshow(cross_corr_image1, cmap='gray')
-plt.subplot(2, 2, 4)
-plt.imshow(binarized1, cmap='gray')
 
-# labels but colored
-f = f + 1
-plt.figure(f)
-plt.imshow(labeled_array, cmap='nipy_spectral')
-'''
 # big labeled diagram of cross corr (claude coded)
 f = f + 1
 plt.figure(f)
@@ -80,7 +63,6 @@ pca_result = pca.fit_transform(scaler)
 kmeans = KMeans(n_clusters=6, init="k-means++", n_init=10, random_state=42)
 cluster_labels = kmeans.fit_predict(pca_result)
 score = silhouette_score(pca_result, cluster_labels)
-print(f'k={6}, silhouette score={score}')
 
 # the actual plotting part (claude coded)
 n_clusters = 6
@@ -121,5 +103,26 @@ for group_idx, group in enumerate(groups):
 f = f + 1
 plt.figure(f)
 plt.imshow(group_colors)  # black background since unfilled pixels stay at 0
+
+f = f + 1
+plt.figure(f)
+plt.subplot(2, 3, 1)
+plt.imshow(np.mean(data, axis=0), cmap='gray')
+plt.title("mean")
+plt.subplot(2, 3, 2)
+plt.imshow(np.std(data, axis=0), cmap='gray')
+plt.title("stdev")
+plt.subplot(2, 3, 3)
+plt.imshow(cross_corr_image1, cmap='gray')
+plt.title("cross corr")
+plt.subplot(2, 3, 4)
+plt.imshow(np.mean(data, axis=0), cmap='gray')
+plt.imshow(group_colors, alpha = 0.25)
+plt.subplot(2, 3, 5)
+plt.imshow(np.std(data, axis=0), cmap='gray')
+plt.imshow(group_colors, alpha = 0.25)
+plt.subplot(2, 3, 6)
+plt.imshow(cross_corr_image1, cmap='gray')
+plt.imshow(group_colors, alpha = 0.25)
 
 plt.show()

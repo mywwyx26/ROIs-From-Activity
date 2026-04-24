@@ -125,4 +125,21 @@ plt.subplot(2, 3, 6)
 plt.imshow(cross_corr_image1, cmap='gray')
 plt.imshow(group_colors, alpha = 0.25)
 
+# last 2 groups looks good and everything else noise
+# so we're gonna split them more
+cluster4 = np.where(cluster_labels == 4)[0]
+cluster5 = np.where(cluster_labels == 5)[0]
+
+for cluster_idx, roi_indices in [(4, cluster4), (5, cluster5)]:
+    n = len(roi_indices)
+    f = f + 1
+    plt.figure(f)
+    plt.suptitle(f'Cluster {cluster_idx + 1} — all ROIs individually')
+    for plot_idx, roi_idx in enumerate(roi_indices):
+        plt.subplot(n, 1, plot_idx + 1)
+        plt.plot(deltaf[roi_idx], linewidth=0.8)
+        plt.title(f'ROI {roi_idx + 1}', fontsize=7)
+        plt.tick_params(labelbottom=False, labelleft=False)
+    plt.tight_layout()
+
 plt.show()

@@ -1,14 +1,33 @@
-# the imports have squigglies but it works if i do >python findrois.py
+import os
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 from scipy import ndimage
-from scipy.cluster.hierarchy import linkage, leaves_list
+from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import calinski_harabasz_score
 from sklearn.preprocessing import StandardScaler
 
+# helper function: find best k by largest gap in merge distances
+def best_k_from_linkage(lm, min_k=2, max_k=10):
+    merge_distances = lm[:, 2]
+    gaps = np.diff(merge_distances)
+
+    # try gaps from largest to smallest, pick first that gives k > 1
+    for idx in np.argsort(gaps)[::-1]:
+        threshold = (merge_distances[idx] + merge_distances[idx + 1]) / 2
+        trial_labels = fcluster(lm, t=threshold, criterion='distance') - 1
+        k = len(np.unique(trial_labels))
+        if min_k <= k <= max_k:
+            return trial_labels, k
+    
+    # fallback
+    labels = fcluster(lm, t=min_k, criterion='maxclust') - 1
+    return labels, min_k
+
+# main function
 def findroi(data, cross_corr, filename):
     # binarize cross corr image
     mean1, stdev1 = np.mean(cross_corr), np.std(cross_corr)
@@ -43,15 +62,30 @@ def findroi(data, cross_corr, filename):
     output = "outputs"
     os.makedirs(output, exist_ok = True)
 
-    # attempt pca and kmeans to do grouping instead of manually, pca = 6 and k = 6
-    scaler = StandardScaler().fit_transform(corrcoef_matrix)
-    pca = PCA(n_components=6)
-    pca_result = pca.fit_transform(scaler)
-    kmeans = KMeans(n_clusters=6, init="k-means++", n_init=10, random_state=42)
-    cluster_labels = kmeans.fit_predict(pca_result)
+    # split into 2 main groups first
+    main_labels = fcluster(linkage_matrix, t=2, criterion='maxclust') - 1
+    cluster_labels = np.zeros(num_features, dtype=int)
+    next_label = 0
 
-    # average traces of each cluster (claude coded)
-    n_clusters = 6
+    for main_group in [0, 1]:
+        idx = np.where(main_labels == main_group)[0]
+        if len(idx) < 4:
+            cluster_labels[idx] = next_label
+            next_label += 1
+            continue
+        sub_corr = np.corrcoef(deltaf[idx])
+        sub_dist = 1 - sub_corr
+        sub_linkage = linkage(sub_dist, method='average')
+        sub_labels, sub_k = best_k_from_linkage(sub_linkage)
+        for s in range(sub_k):
+            cluster_labels[idx[sub_labels == s]] = next_label
+            next_label += 1
+        print(f"  Group {main_group}: {sub_k} sub-clusters")
+
+    n_clusters = next_label
+    print(f"  Total: {n_clusters} clusters")
+
+    # average traces of each cluster
     plt.figure(1, figsize = (20,15))
     groups = [[] for _ in range(n_clusters)]
     for cluster_idx in range(n_clusters):

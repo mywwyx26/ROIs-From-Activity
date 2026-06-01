@@ -5,10 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
 from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
-from sklearn.decomposition import PCA
-from sklearn.cluster import KMeans
-from sklearn.metrics import calinski_harabasz_score
-from sklearn.preprocessing import StandardScaler
 
 # helper function: find best k by largest gap in merge distances
 def best_k_from_linkage(lm, min_k=2, max_k=10):

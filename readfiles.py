@@ -1,4 +1,3 @@
-# the imports have squigglies but it works if i do >python readfiles.py
 import numpy as np
 import tifffile
 from scipy import ndimage

@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
 from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
+from scipy.spatial.distance import squareform
 
 # helper function: find best k by largest gap in merge distances
 def best_k_from_linkage(lm, min_k=2, max_k=10):
@@ -26,10 +27,10 @@ def best_k_from_linkage(lm, min_k=2, max_k=10):
 # main function
 def findroi(data, cross_corr, filename):
     # binarize cross corr image
-    mean1, stdev1 = np.mean(cross_corr), np.std(cross_corr)
-    binarized1 = np.where(cross_corr > mean1 + stdev1, 1, 0)
-    labeled_array, num_features = ndimage.label(binarized1)
-    sizes = ndimage.sum(binarized1, labeled_array, range(num_features + 1))
+    mean, stdev = np.mean(cross_corr), np.std(cross_corr)
+    binarized = np.where(cross_corr > mean + stdev, 1, 0)
+    labeled_array, num_features = ndimage.label(binarized)
+    sizes = ndimage.sum(binarized, labeled_array, range(num_features + 1))
 
     # threshold for getting rid of small rois: 30 -> 72, 40 -> 63, 50 -> 54
     mask = sizes < 50
@@ -46,10 +47,12 @@ def findroi(data, cross_corr, filename):
         for j in range(data.shape[0]):
             deltaf[i, j] = roi_trace[j] - f0[i]
 
-    # cross correlation and reordering (claude coded)
+    # cross correlation and reordering
     corrcoef_matrix = np.corrcoef(deltaf)
     distance = 1 - corrcoef_matrix
-    linkage_matrix = linkage(distance, method='average')
+    distance = (distance + distance.T) / 2
+    np.fill_diagonal(distance, 0)
+    linkage_matrix = linkage(squareform(distance), method='average')
     cluster_order = leaves_list(linkage_matrix)  # new ordering of ROI indices
     deltaf_reordered = deltaf[cluster_order]
     corrcoef_reordered = np.corrcoef(deltaf_reordered)
@@ -71,15 +74,14 @@ def findroi(data, cross_corr, filename):
             continue
         sub_corr = np.corrcoef(deltaf[idx])
         sub_dist = 1 - sub_corr
-        sub_linkage = linkage(sub_dist, method='average')
+        sub_dist = (sub_dist + sub_dist.T) / 2
+        np.fill_diagonal(sub_dist, 0)
+        sub_linkage = linkage(squareform(sub_dist), method='average')
         sub_labels, sub_k = best_k_from_linkage(sub_linkage)
         for s in range(sub_k):
             cluster_labels[idx[sub_labels == s]] = next_label
             next_label += 1
-        print(f"  Group {main_group}: {sub_k} sub-clusters")
-
     n_clusters = next_label
-    print(f"  Total: {n_clusters} clusters")
 
     # average traces of each cluster
     plt.figure(1, figsize = (20,15))

@@ -12,6 +12,6 @@ tif_files = [
 
 for filename in tif_files:
     data, cross_corr = readfile(filename, sigma=1, w=3)
-    print(f'readfiles done:',filename)
+    print(f'readfiles done:', os.path.basename(filename))
     findroi(data, cross_corr, filename=os.path.basename(filename))
-    print(f'findrois done:',filename)
+    print(f'findrois done:', os.path.basename(filename))

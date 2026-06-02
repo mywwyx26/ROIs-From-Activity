@@ -4,11 +4,11 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
-from scipy.cluster.hierarchy import linkage, leaves_list, fcluster, dendrogram
+from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
 from scipy.spatial.distance import squareform
 
 # helper function: find best k by largest gap in merge distances
-def best_k_from_linkage(lm, min_k=2, max_k=12): # set3 has 12 colors
+def best_k_from_linkage(lm, min_k=2, max_k=20):
     merge_distances = lm[:, 2]
     gaps = np.diff(merge_distances)
 
@@ -50,40 +50,15 @@ def findroi(data, cross_corr, filename):
     # cross correlation and reordering
     corrcoef_matrix = np.corrcoef(deltaf)
     distance = 1 - corrcoef_matrix
-
-    # plotting things and save them in output folder (claude coded)
-    output = "outputs"
-    os.makedirs(output, exist_ok = True)
-
-    linkage_matrix = linkage(distance, method='average')
-    plt.figure(figsize=(max(10, num_features * 0.3), 6))
-    dendrogram(linkage_matrix, labels=[str(i+1) for i in range(num_features)])
-    plt.title('ROI Dendrogram: Linkage1')
-    plt.xlabel('ROI')
-    plt.ylabel('Distance')
-    plt.tight_layout()
-    plt.savefig(os.path.join(output, f"linkage1_dendrogram.svg"))
-    plt.close()
-    
     distance = (distance + distance.T) / 2
     np.fill_diagonal(distance, 0)
     linkage_matrix = linkage(squareform(distance), method='average')
-    plt.figure(figsize=(max(10, num_features * 0.3), 6))
-    dendrogram(linkage_matrix, labels=[str(i+1) for i in range(num_features)])
-    plt.title('ROI Dendrogram: Linkage2')
-    plt.xlabel('ROI')
-    plt.ylabel('Distance')
-    plt.tight_layout()
-    plt.savefig(os.path.join(output, f"linkage2_dendrogram.svg"))
-    plt.close()
-
-    # reorder ROI indices so that the matrix looks better
     cluster_order = leaves_list(linkage_matrix)
     corrcoef_reordered = np.corrcoef(deltaf[cluster_order])
-
-    '''# plotting things and save them in output folder (claude coded)
+    
+    # plotting things and save them in output folder (claude coded)
     output = "outputs"
-    os.makedirs(output, exist_ok = True)'''
+    os.makedirs(output, exist_ok = True)
 
     # split into 2 main groups first
     main_labels = fcluster(linkage_matrix, t=2, criterion='maxclust') - 1
@@ -98,34 +73,21 @@ def findroi(data, cross_corr, filename):
             continue
         sub_corr = np.corrcoef(deltaf[idx])
         sub_dist = 1 - sub_corr
-
-        sub_linkage = linkage(sub_dist, method='average')
-        plt.figure(figsize=(max(10, sub_corr.shape[0] * 0.3), 6))
-        dendrogram(sub_linkage, labels=[str(i+1) for i in range(sub_corr.shape[0])])
-        plt.title(f'ROI Dendrogram: Sub1_{main_group}')
-        plt.xlabel('ROI')
-        plt.ylabel('Distance')
-        plt.tight_layout()
-        plt.savefig(os.path.join(output, f"sub1_{main_group}_dendrogram.svg"))
-        plt.close()
-        
         sub_dist = (sub_dist + sub_dist.T) / 2
         np.fill_diagonal(sub_dist, 0)
         sub_linkage = linkage(squareform(sub_dist), method='average')
-        plt.figure(figsize=(max(10, sub_corr.shape[0] * 0.3), 6))
-        dendrogram(sub_linkage, labels=[str(i+1) for i in range(sub_corr.shape[0])])
-        plt.title(f'ROI Dendrogram: Sub2_{main_group}')
-        plt.xlabel('ROI')
-        plt.ylabel('Distance')
-        plt.tight_layout()
-        plt.savefig(os.path.join(output, f"sub2_{main_group}_dendrogram.svg"))
-        plt.close()
-        
         sub_labels, sub_k = best_k_from_linkage(sub_linkage)
         for s in range(sub_k):
             cluster_labels[idx[sub_labels == s]] = next_label
             next_label += 1
     n_clusters = next_label
+
+    # color coding
+    set1 = [plt.cm.Set1(i) for i in range(9)]
+    set2 = [plt.cm.Set2(i) for i in range(8)]
+    set3 = [plt.cm.Set3(i) for i in range(12)]
+    all_colors = set1 + set2 + set3  # 29 total
+    colors = [all_colors[i % len(all_colors)] for i in range(n_clusters)]
 
     # average traces of each cluster
     plt.figure(1, figsize = (20,15))
@@ -137,7 +99,7 @@ def findroi(data, cross_corr, filename):
             groups[cluster_idx].append(roi_idx + 1)
         if len(roi_indices) > 0:
             avg_trace = np.mean(deltaf[roi_indices], axis=0)
-            plt.plot(avg_trace, color=plt.cm.Set3(cluster_idx), linewidth=1.5)
+            plt.plot(avg_trace, color=colors[cluster_idx], linewidth=1.5)
             plt.ylabel(f'C{cluster_idx+1}\n(n={len(roi_indices)})', fontsize=7, rotation=0, labelpad=35)
         plt.tick_params(labelbottom=(cluster_idx == n_clusters - 1))
     plt.figure(1).savefig(os.path.join(output, f"{filename}_clusters_over_time.svg"))
@@ -146,7 +108,7 @@ def findroi(data, cross_corr, filename):
     group_colors = np.zeros((*labeled_array.shape, 3))  # RGB image
 
     for group_idx, group in enumerate(groups):
-        color = plt.cm.Set3(group_idx)[:3]  # RGB, same as plot 5
+        color = colors[group_idx][:3]  # RGB instead of RGBA
         for roi in group:
             mask = labeled_array == roi
             group_colors[mask] = color
@@ -157,7 +119,7 @@ def findroi(data, cross_corr, filename):
 
     # with the big labeled diagram of cross corr
     plt.subplot(1,2,2)
-    plt.imshow(corrcoef_matrix, cmap='Spectral', vmin=-1, vmax=1)
+    plt.imshow(corrcoef_reordered, cmap='Spectral', vmin=-1, vmax=1)
     ticks = np.arange(num_features)
     labels = [str(cluster_order[i] + 1) for i in range(num_features)]  # +1 for 1-based ROI numbers
     plt.xticks(ticks, labels, rotation=90, fontsize=6)

@@ -46,13 +46,29 @@ def findroi(data, cross_corr, filename):
         f0[i] = np.median(roi_trace)
         for j in range(data.shape[0]):
             deltaf[i, j] = roi_trace[j] - f0[i]
+    print(f'deltaf shape:', deltaf.shape)
+    np.save('deltaf.npy', deltaf)
 
     # cross correlation and reordering
     corrcoef_matrix = np.corrcoef(deltaf)
+    print(f'corrcoef shape:', corrcoef_matrix.shape)
+    np.save('corrcoef.npy', corrcoef_matrix)
     distance = 1 - corrcoef_matrix
+
+    linkage_matrix = linkage(distance, method='average')
+    print(f'distance1 shape:', distance.shape)
+    np.save('distance1.npy', distance)
+    print(f'linkage1 shape:', linkage_matrix.shape)
+    np.save('linkage1.npy', linkage_matrix)
+    
     distance = (distance + distance.T) / 2
     np.fill_diagonal(distance, 0)
     linkage_matrix = linkage(squareform(distance), method='average')
+    print(f'distance2 shape:', distance.shape)
+    np.save('distance2.npy', distance)
+    print(f'linkage2 shape:', linkage_matrix.shape)
+    np.save('linkage2.npy', linkage_matrix)
+
     cluster_order = leaves_list(linkage_matrix)  # new ordering of ROI indices
     deltaf_reordered = deltaf[cluster_order]
     corrcoef_reordered = np.corrcoef(deltaf_reordered)
@@ -74,9 +90,21 @@ def findroi(data, cross_corr, filename):
             continue
         sub_corr = np.corrcoef(deltaf[idx])
         sub_dist = 1 - sub_corr
+
+        sub_linkage = linkage(sub_dist, method='average')
+        print(f'subdist1_{main_group} shape:', sub_dist.shape)
+        np.save(f'subdist1_{main_group}.npy', sub_dist)
+        print(f'sublinkage1_{main_group} shape:', sub_linkage.shape)
+        np.save(f'sublinkage1_{main_group}.npy', sub_linkage)
+        
         sub_dist = (sub_dist + sub_dist.T) / 2
         np.fill_diagonal(sub_dist, 0)
         sub_linkage = linkage(squareform(sub_dist), method='average')
+        print(f'subdist2_{main_group} shape:', sub_dist.shape)
+        np.save(f'subdist2_{main_group}.npy', sub_dist)
+        print(f'sublinkage2_{main_group} shape:', sub_linkage.shape)
+        np.save(f'sublinkage2_{main_group}.npy', sub_linkage)
+        
         sub_labels, sub_k = best_k_from_linkage(sub_linkage)
         for s in range(sub_k):
             cluster_labels[idx[sub_labels == s]] = next_label
@@ -113,7 +141,7 @@ def findroi(data, cross_corr, filename):
 
     # with the big labeled diagram of cross corr
     plt.subplot(1,2,2)
-    plt.imshow(corrcoef_reordered, cmap='Spectral', vmin=-1, vmax=1)
+    plt.imshow(corrcoef_matrix, cmap='Spectral', vmin=-1, vmax=1)
     ticks = np.arange(num_features)
     labels = [str(cluster_order[i] + 1) for i in range(num_features)]  # +1 for 1-based ROI numbers
     plt.xticks(ticks, labels, rotation=90, fontsize=6)

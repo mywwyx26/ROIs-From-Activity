@@ -25,7 +25,7 @@ def best_k_from_linkage(lm, min_k=2, max_k=20):
     return labels, min_k
 
 # main function
-def findroi(data, cross_corr, filename):
+def findroi(data, cross_corr, filename, output='outputs'):
     # binarize cross corr image
     mean, stdev = np.mean(cross_corr), np.std(cross_corr)
     binarized = np.where(cross_corr > mean + stdev, 1, 0)
@@ -56,10 +56,7 @@ def findroi(data, cross_corr, filename):
     cluster_order = leaves_list(linkage_matrix)
     corrcoef_reordered = np.corrcoef(deltaf[cluster_order])
     
-    # plotting things and save them in output folder (claude coded)
-    output = "outputs"
-    os.makedirs(output, exist_ok = True)
-
+    # plot things and save them in output folder (claude coded)
     # split into 2 main groups first
     main_labels = fcluster(linkage_matrix, t=2, criterion='maxclust') - 1
     cluster_labels = np.zeros(num_features, dtype=int)

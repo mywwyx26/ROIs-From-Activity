@@ -11,7 +11,14 @@ tif_files = [
 ]
 
 for filename in tif_files:
+    # make subfolder in output folder
+    basename = os.path.basename(filename)
+    output = os.path.join("outputs", os.path.splitext(basename)[0])
+    os.makedirs(output, exist_ok=True)
+    print(f'folder created: {output}')
+
+    # run code
     data, cross_corr = readfile(filename, sigma=1, w=3)
-    print(f'readfiles done:', os.path.basename(filename))
-    findroi(data, cross_corr, filename=os.path.basename(filename))
-    print(f'findrois done:', os.path.basename(filename))
+    print(f'readfiles done: {basename}')
+    findroi(data, cross_corr, filename=basename, output=output)
+    print(f'findrois done: {basename}')

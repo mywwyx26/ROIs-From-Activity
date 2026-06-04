@@ -1,72 +1,38 @@
-import os
-os.environ["OMP_NUM_THREADS"] = "1"
+'''
+FINDROIS.PY
+    This file takes the data and cross correlation image from readfiles.py and uses it to identify ROIs.
+    Then the ROIs are sorted into clusters using hierarchical clustering, and silhouette score is used to
+    find the best value of k (number of clusters). Each cluster's activity is plotted over time and the
+    corresponding ROIs are color coded on the binarized image.
 
+Inputs:
+    data (3D ndarray): the .tif file as an array
+    cross_corr (2D ndarray): the cross correlation image
+    filename (str): the name of the file being analyzed, for .svg file naming
+    output (str, default = "outputs"): the folder to save the .svg files to
+
+Outputs:
+    clusters_over_time (.svg): fluorescence of all ROIs in each cluster identified
+    groups_and_matrix (.svg):
+        groups: color coded by clusters version of the binarized cross corr image
+        matrix: correlation coefficient matrix, in order from most to least correlated
+'''
+
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
-from scipy.cluster.hierarchy import linkage, leaves_list, dendrogram, fcluster
+from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
+from scipy.spatial.distance import squareform
 from sklearn.metrics import silhouette_samples
 from skimage.filters import threshold_otsu
 
 # main function
-def findroi(data, cross_corr, filename, output_dir="outputs"):
-    os.makedirs(output_dir, exist_ok=True)
-    output = output_dir
+def findroi(data, cross_corr, filename, output="outputs"):
+    os.makedirs(output, exist_ok=True)
 
     # binarize cross corr image using Otsu's method
-    otsu_thresh = threshold_otsu(cross_corr)
-    binarized = np.where(cross_corr > otsu_thresh, 1, 0)
-
-    # comparison plot: mean+stdev vs otsu
-    mean, stdev = np.mean(cross_corr), np.std(cross_corr)
-    meanstd_thresh = mean + stdev
-    binarized_meanstd = np.where(cross_corr > meanstd_thresh, 1, 0)
-
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
-    fig.suptitle(f"Threshold comparison — {filename}", fontsize=11)
-
-    axes[0, 0].imshow(cross_corr, cmap="gray")
-    axes[0, 0].set_title("Original cross-correlation")
-    axes[0, 0].axis("off")
-
-    axes[0, 1].imshow(binarized_meanstd, cmap="gray")
-    axes[0, 1].set_title(f"mean+stdev  (thresh={meanstd_thresh:.3f})")
-    axes[0, 1].axis("off")
-
-    axes[0, 2].imshow(binarized, cmap="gray")
-    axes[0, 2].set_title(f"Otsu  (thresh={otsu_thresh:.3f})")
-    axes[0, 2].axis("off")
-
-    axes[1, 0].hist(cross_corr.ravel(), bins=100, color="steelblue", edgecolor="none")
-    axes[1, 0].axvline(meanstd_thresh, color="tomato",    linewidth=1.5, label=f"mean+stdev ({meanstd_thresh:.3f})")
-    axes[1, 0].axvline(otsu_thresh,    color="limegreen", linewidth=1.5, label=f"Otsu ({otsu_thresh:.3f})")
-    axes[1, 0].set_title("Pixel intensity histogram")
-    axes[1, 0].set_xlabel("Cross-correlation value")
-    axes[1, 0].set_ylabel("Count")
-    axes[1, 0].legend(fontsize=8)
-
-    diff = binarized.astype(int) - binarized_meanstd.astype(int)
-    diff_rgb = np.zeros((*diff.shape, 3))
-    diff_rgb[diff ==  1] = [0, 1, 0]
-    diff_rgb[diff == -1] = [1, 0, 0]
-    axes[1, 1].imshow(diff_rgb)
-    axes[1, 1].set_title("Difference (green=Otsu only, red=mean+stdev only)")
-    axes[1, 1].axis("off")
-
-    n_meanstd = int(binarized_meanstd.sum())
-    n_otsu    = int(binarized.sum())
-    axes[1, 2].bar(["mean+stdev", "Otsu"], [n_meanstd, n_otsu],
-                   color=["tomato", "limegreen"], edgecolor="none")
-    axes[1, 2].set_title("Foreground pixel count")
-    axes[1, 2].set_ylabel("Pixels")
-    for bar, val in zip(axes[1, 2].patches, [n_meanstd, n_otsu]):
-        axes[1, 2].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 20,
-                        str(val), ha="center", va="bottom", fontsize=9)
-
-    plt.tight_layout()
-    fig.savefig(os.path.join(output, f"{filename}_threshold_comparison.svg"))
-    plt.close(fig)
-
+    binarized = np.where(cross_corr > threshold_otsu(cross_corr), 1, 0)
     labeled_array, num_features = ndimage.label(binarized)
     sizes = ndimage.sum(binarized, labeled_array, range(num_features + 1))
 
@@ -85,49 +51,22 @@ def findroi(data, cross_corr, filename, output_dir="outputs"):
         for j in range(data.shape[0]):
             deltaf[i, j] = roi_trace[j] - f0[i]
 
-    # distance matrix — full range, no clipping of negative correlations
+    # corrcoef and distance matrices
     corrcoef_matrix = np.corrcoef(deltaf)
     distance = 1 - corrcoef_matrix
     distance = (distance + distance.T) / 2
-    distance = np.clip(distance, 0, None)
     np.fill_diagonal(distance, 0)
 
-    # distance distribution plots
-    condensed = distance[np.triu_indices(distance.shape[0], k=1)]
-
-    fig_dist, axes_dist = plt.subplots(1, 3, figsize=(18, 5))
-    fig_dist.suptitle(f"Distance structure — {filename}", fontsize=11)
-
-    axes_dist[0].hist(condensed, bins=50, color="steelblue", edgecolor="none")
-    axes_dist[0].set_xlabel("Distance (1 - correlation)")
-    axes_dist[0].set_ylabel("Count")
-    axes_dist[0].set_title("Pairwise distance distribution")
-
-    axes_dist[1].plot(np.sort(condensed), color="steelblue", linewidth=1)
-    axes_dist[1].set_xlabel("Pair rank")
-    axes_dist[1].set_ylabel("Distance")
-    axes_dist[1].set_title("Sorted pairwise distances (steps/elbows = cluster boundaries)")
-
-    im = axes_dist[2].imshow(distance, cmap="viridis", vmin=0, vmax=2)
-    axes_dist[2].set_title("Distance matrix (ROI order)")
-    axes_dist[2].set_xlabel("ROI")
-    axes_dist[2].set_ylabel("ROI")
-    plt.colorbar(im, ax=axes_dist[2], fraction=0.046, pad=0.04)
-
-    plt.tight_layout()
-    fig_dist.savefig(os.path.join(output, f"{filename}_distance_structure.svg"))
-    plt.close(fig_dist)
-
     # hierarchical clustering
-    linkage_matrix = linkage(condensed, method='average')
+    linkage_matrix = linkage(squareform(distance), method='average')
     cluster_order = leaves_list(linkage_matrix)
     corrcoef_reordered = np.corrcoef(deltaf[cluster_order])
 
     # find best k using mean silhouette score
-    max_k = min(20, num_features - 1)
-    best_k, best_score, best_raw_labels = 2, -1, None
+    min_clusters = 3
+    best_k, best_score, best_raw_labels = min_clusters, -1, None
     all_scores = {}
-    for k in range(2, max_k + 1):
+    for k in range(min_clusters, num_features - 1):
         labels = fcluster(linkage_matrix, t=k, criterion='maxclust') - 1
         if len(np.unique(labels)) < 2:
             continue
@@ -244,43 +183,20 @@ def findroi(data, cross_corr, filename, output_dir="outputs"):
     plt.figure(2).savefig(os.path.join(output, f"{filename}_groups_and_matrix.svg"))
     plt.close(plt.figure(2))
 
-    # dendrogram: leaves coloured by cluster
-    leaf_colors = {roi_idx: colors[cluster_labels[roi_idx]] for roi_idx in range(num_features)}
-
-    fig_dend, ax_dend = plt.subplots(figsize=(max(12, num_features * 0.25), 6))
-    dendrogram(
-        linkage_matrix,
-        ax=ax_dend,
-        labels=[str(i + 1) for i in range(num_features)],
-        leaf_font_size=6,
-        link_color_func=lambda _: "#aaaaaa",
-        leaf_label_func=lambda i: str(i + 1),
-    )
-    for lbl in ax_dend.get_xticklabels():
-        roi_idx = int(lbl.get_text()) - 1
-        c = leaf_colors[roi_idx]
-        lbl.set_color(c[:3])
-    cut_height = linkage_matrix[-(best_k - 1), 2]
-    ax_dend.axhline(cut_height, color="tomato", linewidth=1.2, linestyle="--",
-                    label=f"k={best_k} cut ({cut_height:.3f})")
-    ax_dend.set_title(f"All-ROI dendrogram (coloured by cluster, gray=noise) — {filename}")
-    ax_dend.set_ylabel("Distance")
-    ax_dend.legend(fontsize=8)
-    plt.tight_layout()
-    fig_dend.savefig(os.path.join(output, f"{filename}_dendrogram_all.svg"))
-    plt.close(fig_dend)
-
-
+'''
+Takes the data.npy and cross_corr.npy files from each subfolder in readfiles and outputs the resulting
+graphsto the outputs folder. Useful to save time because the cross correlation function in readfiles.py
+is very slow. Requires readfiles.py to be run first, so that there are existing .npy files.
+'''
 if __name__ == "__main__":
     print('FINDROIS only')
     subfolders = [f.path for f in os.scandir("readfiles") if f.is_dir()]
 
     for foldername in subfolders:
-        print(foldername)
         output = os.path.join("outputs", os.path.basename(foldername))
         os.makedirs(output, exist_ok=True)
         print(f'folder: {output}')
 
         data = np.load(f'{foldername}/data.npy')
         cross_corr = np.load(f'{foldername}/cross_corr.npy')
-        findroi(data, cross_corr, filename=os.path.basename(foldername), output_dir=output)
+        findroi(data, cross_corr, filename=os.path.basename(foldername), output=output)

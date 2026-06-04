@@ -1,3 +1,13 @@
+'''
+MAIN.PY
+    Runs readfiles.py and findrois.py in succession for each .tif file.
+
+Inputs:
+    folder (str): the inputs folder that contains all the .tif files to be read and analyzed
+
+Outputs:
+    output (str): from findrois.py, all files go into the outputs folder, sorted into subfolders
+'''
 import os
 from readfiles import readfile
 from findrois import findroi
@@ -20,5 +30,5 @@ for filename in tif_files:
     # run code
     data, cross_corr = readfile(filename, sigma=1, w=3)
     print(f'readfiles done: {basename}')
-    findroi(data, cross_corr, filename=basename, output_dir=output)
+    findroi(data, cross_corr, filename=basename, output=output)
     print(f'findrois done: {basename}')

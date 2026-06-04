@@ -1,3 +1,17 @@
+'''
+READFILES.PY
+    This file takes a calcium imaging recording and computes the cross correlation between each pixel.
+
+Inputs:
+    filename (str): .tif file
+    sigma (int, default = 1): standard deviation of the gaussian bell curve, higher value = more blurred
+    w (int ,default = 3): window of local neighborhood, at 3 this is a 7x7 pixel area
+   
+Outputs:
+    data (3D ndarray): the .tif file as an array
+    cross_corr (2D ndarray): the cross correlation image
+'''
+
 import os
 import numpy as np
 import tifffile
@@ -58,6 +72,11 @@ def readfile(filename, sigma = 1, w = 3):
     cross_corr = cross_corr_image(blurred_data, w)
     return data, cross_corr
 
+'''
+Takes the .tif files from the inputs folder, then saves data.npy and cross_corr.npy to the readfiles
+folder, with subfolders for each recording. Allows for findrois.py to be run multiple times without
+having to redo the cross correlation each time.
+'''
 if __name__ == "__main__":
     print('READFILES only')
     input_folder = "C:\\Users\\megan\\flies\\ROIsFromActivity\\inputs"

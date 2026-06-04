@@ -1,10 +1,20 @@
 github doesn't allow files larger than 25mb so all the other files are in google drive, this is just for the code that i need to keep updating
 
-LIST OF HARDCODED PARTS:
+file descriptions:
+- main.py: runs readfiles and findrois on all files in the inputs folder, saves .svg files to output folder
+- readfiles.py: do cross corr of the tif file, return np arrays of video and cross corr image
+    - when executed directly, takes all inputs from input folder and saves .npy files to readfiles folder
+- findrois.py: binarize the cross corr image, filter out rois smaller than 50px, deltaf/f for normalization, get correlation coefficient matrix, do clustering (see below), graph everything
+    - when executed directly, takes all inputs from readfiles folder and saves .svg files to output folder
+
+hardcoded parts:
 - cross corr is sigma = 1 and w = 3
 - findrois threshold for small rois is 50 pixels
+- min clusters = 3
+- noise threshold = 0.0
+- there's probably more
 
-Clustering:
+clustering:
 - tried kmeans, but could not avoid the hard coding and it wasn't very fitting anyway
 - discovered hierarchical, which worked until i redid the binarize (otsu's method to avoid hard coding)
 - discovered dbscan which seems like a better option, since it can identify noise, not pushed to git

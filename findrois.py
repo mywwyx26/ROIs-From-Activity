@@ -4,31 +4,104 @@ os.environ["OMP_NUM_THREADS"] = "1"
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
-from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
+from scipy.cluster.hierarchy import linkage, leaves_list, fcluster, dendrogram
 from scipy.spatial.distance import squareform
+from sklearn.metrics import silhouette_score
 
-# helper function: find best k by largest gap in merge distances
-def best_k_from_linkage(lm, min_k=2, max_k=20):
-    merge_distances = lm[:, 2]
-    gaps = np.diff(merge_distances)
+# helper function: find best k using silhouette score on precomputed distance matrix
+def best_k_from_linkage(lm, dist_matrix, min_k=2, max_k=20):
+    n = dist_matrix.shape[0]
+    max_k = min(max_k, n - 1)  # can't have more clusters than samples - 1
 
-    # try gaps from largest to smallest, pick first that gives k > 1
-    for idx in np.argsort(gaps)[::-1]:
-        threshold = (merge_distances[idx] + merge_distances[idx + 1]) / 2
-        trial_labels = fcluster(lm, t=threshold, criterion='distance') - 1
-        k = len(np.unique(trial_labels))
-        if min_k <= k <= max_k:
-            return trial_labels, k
-    
-    # fallback
-    labels = fcluster(lm, t=min_k, criterion='maxclust') - 1
-    return labels, min_k
+    best_k, best_score, best_labels = min_k, -1, None
+    all_scores = {}  # k -> silhouette score
+
+    for k in range(min_k, max_k + 1):
+        labels = fcluster(lm, t=k, criterion='maxclust') - 1
+        if len(np.unique(labels)) < 2:
+            continue
+        score = silhouette_score(dist_matrix, labels, metric='precomputed')
+        all_scores[k] = score
+        if score > best_score:
+            best_score, best_k, best_labels = score, k, labels
+
+    if best_labels is None:  # fallback
+        best_labels = fcluster(lm, t=min_k, criterion='maxclust') - 1
+        best_k = min_k
+        all_scores[min_k] = -1
+
+    # pick first k where score is greater than the previous k's score
+    ks = sorted(all_scores.keys())
+    chosen_k, chosen_labels = ks[0], fcluster(lm, t=ks[0], criterion='maxclust') - 1
+    for i in range(1, len(ks)):
+        if all_scores[ks[i]] > all_scores[ks[i - 1]]:
+            chosen_k = ks[i]
+            chosen_labels = fcluster(lm, t=chosen_k, criterion='maxclust') - 1
+            break
+
+    return chosen_labels, chosen_k, all_scores
 
 # main function
-def findroi(data, cross_corr, filename, output='outputs'):
-    # binarize cross corr image
+def findroi(data, cross_corr, filename, output_dir="outputs"):
+    # binarize cross corr image using Otsu's method
+    from skimage.filters import threshold_otsu
+    otsu_thresh = threshold_otsu(cross_corr)
+    binarized = np.where(cross_corr > otsu_thresh, 1, 0)
+
+    # comparison plot: mean+stdev vs otsu
     mean, stdev = np.mean(cross_corr), np.std(cross_corr)
-    binarized = np.where(cross_corr > mean + stdev, 1, 0)
+    meanstd_thresh = mean + stdev
+    binarized_meanstd = np.where(cross_corr > meanstd_thresh, 1, 0)
+
+    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+    fig.suptitle(f"Threshold comparison — {filename}", fontsize=11)
+
+    axes[0, 0].imshow(cross_corr, cmap="gray")
+    axes[0, 0].set_title("Original cross-correlation")
+    axes[0, 0].axis("off")
+
+    axes[0, 1].imshow(binarized_meanstd, cmap="gray")
+    axes[0, 1].set_title(f"mean+stdev  (thresh={meanstd_thresh:.3f})")
+    axes[0, 1].axis("off")
+
+    axes[0, 2].imshow(binarized, cmap="gray")
+    axes[0, 2].set_title(f"Otsu  (thresh={otsu_thresh:.3f})")
+    axes[0, 2].axis("off")
+
+    # histogram with both thresholds marked
+    axes[1, 0].hist(cross_corr.ravel(), bins=100, color="steelblue", edgecolor="none")
+    axes[1, 0].axvline(meanstd_thresh, color="tomato",    linewidth=1.5, label=f"mean+stdev ({meanstd_thresh:.3f})")
+    axes[1, 0].axvline(otsu_thresh,    color="limegreen", linewidth=1.5, label=f"Otsu ({otsu_thresh:.3f})")
+    axes[1, 0].set_title("Pixel intensity histogram")
+    axes[1, 0].set_xlabel("Cross-correlation value")
+    axes[1, 0].set_ylabel("Count")
+    axes[1, 0].legend(fontsize=8)
+
+    # difference image: pixels that disagree between the two methods
+    diff = binarized.astype(int) - binarized_meanstd.astype(int)
+    diff_rgb = np.zeros((*diff.shape, 3))
+    diff_rgb[diff ==  1] = [0, 1, 0]   # green: Otsu keeps, mean+stdev drops
+    diff_rgb[diff == -1] = [1, 0, 0]   # red:   mean+stdev keeps, Otsu drops
+    axes[1, 1].imshow(diff_rgb)
+    axes[1, 1].set_title("Difference (green=Otsu only, red=mean+stdev only)")
+    axes[1, 1].axis("off")
+
+    # pixel counts summary
+    n_meanstd = int(binarized_meanstd.sum())
+    n_otsu    = int(binarized.sum())
+    axes[1, 2].bar(["mean+stdev", "Otsu"], [n_meanstd, n_otsu],
+                   color=["tomato", "limegreen"], edgecolor="none")
+    axes[1, 2].set_title("Foreground pixel count")
+    axes[1, 2].set_ylabel("Pixels")
+    for bar, val in zip(axes[1, 2].patches, [n_meanstd, n_otsu]):
+        axes[1, 2].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 20,
+                        str(val), ha="center", va="bottom", fontsize=9)
+
+    plt.tight_layout()
+    os.makedirs(output_dir, exist_ok=True)
+    fig.savefig(os.path.join(output_dir, f"{filename}_threshold_comparison.svg"))
+    plt.close(fig)
+
     labeled_array, num_features = ndimage.label(binarized)
     sizes = ndimage.sum(binarized, labeled_array, range(num_features + 1))
 
@@ -55,29 +128,35 @@ def findroi(data, cross_corr, filename, output='outputs'):
     linkage_matrix = linkage(squareform(distance), method='average')
     cluster_order = leaves_list(linkage_matrix)
     corrcoef_reordered = np.corrcoef(deltaf[cluster_order])
-    
-    # plot things and save them in output folder (claude coded)
-    # split into 2 main groups first
-    main_labels = fcluster(linkage_matrix, t=2, criterion='maxclust') - 1
-    cluster_labels = np.zeros(num_features, dtype=int)
-    next_label = 0
 
-    for main_group in [0, 1]:
-        idx = np.where(main_labels == main_group)[0]
-        if len(idx) < 4:
-            cluster_labels[idx] = next_label
-            next_label += 1
-            continue
-        sub_corr = np.corrcoef(deltaf[idx])
-        sub_dist = 1 - sub_corr
-        sub_dist = (sub_dist + sub_dist.T) / 2
-        np.fill_diagonal(sub_dist, 0)
-        sub_linkage = linkage(squareform(sub_dist), method='average')
-        sub_labels, sub_k = best_k_from_linkage(sub_linkage)
-        for s in range(sub_k):
-            cluster_labels[idx[sub_labels == s]] = next_label
-            next_label += 1
-    n_clusters = next_label
+    # plotting things and save them in output folder
+    output = output_dir
+
+    # single cut: find best k across all ROIs using silhouette score
+    cluster_labels, n_clusters, silhouette_scores = best_k_from_linkage(linkage_matrix, distance, min_k=2, max_k=20)
+
+    # print silhouette scores for all k
+    print(f"\nSilhouette scores for {filename}:")
+    for k, score in sorted(silhouette_scores.items()):
+        marker = " <-- best" if k == n_clusters else ""
+        print(f"  k={k}: {score:.4f}{marker}")
+    print()
+
+    # plot silhouette scores
+    fig_sil, ax_sil = plt.subplots(figsize=(8, 4))
+    ks = sorted(silhouette_scores.keys())
+    scores = [silhouette_scores[k] for k in ks]
+    ax_sil.plot(ks, scores, marker='o', color="steelblue", linewidth=1.5)
+    ax_sil.axvline(n_clusters, color="tomato", linewidth=1.2, linestyle="--",
+                   label=f"best k={n_clusters} ({silhouette_scores[n_clusters]:.4f})")
+    ax_sil.set_xlabel("Number of clusters (k)")
+    ax_sil.set_ylabel("Silhouette score")
+    ax_sil.set_title(f"Silhouette scores — {filename}")
+    ax_sil.set_xticks(ks)
+    ax_sil.legend(fontsize=8)
+    plt.tight_layout()
+    fig_sil.savefig(os.path.join(output, f"{filename}_silhouette_scores.svg"))
+    plt.close(fig_sil)
 
     # color coding
     set1 = [plt.cm.Set1(i) for i in range(9)]
@@ -122,4 +201,36 @@ def findroi(data, cross_corr, filename, output='outputs'):
     plt.xticks(ticks, labels, rotation=90, fontsize=6)
     plt.yticks(ticks, labels, fontsize=6)
     plt.tick_params(axis='x', top=True, bottom=False, labeltop=True, labelbottom=False)
-    plt.figure(2).savefig(os.path.join(output, f"{filename}_groups_and_matrix.svg"))    
+    plt.figure(2).savefig(os.path.join(output, f"{filename}_groups_and_matrix.svg"))
+
+    # dendrogram: all ROIs, leaves coloured by final cluster
+    leaf_colors = {roi_idx: colors[cluster_labels[roi_idx]] for roi_idx in range(num_features)}
+
+    def leaf_color_fn(roi_idx):
+        c = leaf_colors[roi_idx]
+        return f"rgb({int(c[0]*255)},{int(c[1]*255)},{int(c[2]*255)})"
+
+    fig_dend, ax_dend = plt.subplots(figsize=(max(12, num_features * 0.25), 6))
+    dendrogram(
+        linkage_matrix,
+        ax=ax_dend,
+        labels=[str(i + 1) for i in range(num_features)],
+        leaf_font_size=6,
+        link_color_func=lambda _: "#aaaaaa",
+        leaf_label_func=lambda i: str(i + 1),
+    )
+    # colour the x-tick labels by cluster
+    for lbl in ax_dend.get_xticklabels():
+        roi_idx = int(lbl.get_text()) - 1
+        c = leaf_colors[roi_idx]
+        lbl.set_color(c[:3])
+    # mark the best-k cut height
+    cut_height = linkage_matrix[-(n_clusters - 1), 2]
+    ax_dend.axhline(cut_height, color="tomato", linewidth=1.2, linestyle="--",
+                    label=f"k={n_clusters} cut ({cut_height:.3f})")
+    ax_dend.set_title(f"All-ROI dendrogram — {filename}")
+    ax_dend.set_ylabel("Distance")
+    ax_dend.legend(fontsize=8)
+    plt.tight_layout()
+    fig_dend.savefig(os.path.join(output, f"{filename}_dendrogram_all.svg"))
+    plt.close(fig_dend)

@@ -17,7 +17,7 @@ def readfile(filename, sigma = 1, w = 3):
         return blurred_array
 
     # cross corr images function from https://labrigger.com/blog/2013/06/13/local-cross-corr-images/
-    # very slow so try to find or make a better one (w=1 takes 60s, w=2 takes 87s, w=3 takes 117s, w=4 takes 163s)
+    # very slow (w=1 takes 60s, w=2 takes 87s, w=3 takes 117s, w=4 takes 163s)
     def cross_corr_image(tc, w=1):
         num_frames, xmax, ymax = tc.shape
         ccimage = np.zeros((xmax, ymax))

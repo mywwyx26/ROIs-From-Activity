@@ -15,10 +15,10 @@ for filename in tif_files:
     basename = os.path.basename(filename)
     output = os.path.join("outputs", os.path.splitext(basename)[0])
     os.makedirs(output, exist_ok=True)
-    print(f'folder created: {output}')
+    print(f'folder: {output}')
 
     # run code
     data, cross_corr = readfile(filename, sigma=1, w=3)
     print(f'readfiles done: {basename}')
-    findroi(data, cross_corr, filename=basename, output=output)
+    findroi(data, cross_corr, filename=basename, output_dir=output)
     print(f'findrois done: {basename}')

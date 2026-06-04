@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import tifffile
 from scipy import ndimage
@@ -56,3 +57,25 @@ def readfile(filename, sigma = 1, w = 3):
     blurred_data = gaussian_blur_video(data, sigma)
     cross_corr = cross_corr_image(blurred_data, w)
     return data, cross_corr
+
+if __name__ == "__main__":
+    print('READFILES only')
+    input_folder = "C:\\Users\\megan\\flies\\ROIsFromActivity\\inputs"
+
+    tif_files = [
+        os.path.join(input_folder, f)
+        for f in sorted(os.listdir(input_folder))
+        if f.endswith(".tif")
+    ]
+
+    for filename in tif_files:
+        # make subfolder in output folder
+        basename = os.path.basename(filename)
+        output = os.path.join("readfiles", os.path.splitext(basename)[0])
+        os.makedirs(output, exist_ok=True)
+        print(f'folder: {output}')
+
+        # run code
+        data, cross_corr = readfile(filename, sigma=1, w=3)
+        np.save(os.path.join(output, "data.npy"), data)
+        np.save(os.path.join(output, "cross_corr.npy"), cross_corr)

@@ -7,10 +7,12 @@ file descriptions:
 - findrois.py: binarize the cross corr image, filter out rois smaller than 50px, deltaf/f for normalization, get correlation coefficient matrix, do clustering (see below), graph everything
     - when executed directly, takes all inputs from readfiles folder and saves .svg files to output folder
 
-hardcoded parts:
+hardcoded parts: (trust that these all worked best)
 - cross corr is sigma = 1 and w = 3
-- findrois threshold for small rois is 50 pixels
-- min clusters = 3
+- binarize threshold is mean + stdev
+- threshold for small rois is 50 pixels
+- min clusters = 2
+- max clusters = ROIs/2, capped at 25
 - noise threshold = 0.0
 - there's probably more
 

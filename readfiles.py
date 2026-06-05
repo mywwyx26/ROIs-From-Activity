@@ -92,9 +92,9 @@ if __name__ == "__main__":
         basename = os.path.basename(filename)
         output = os.path.join("readfiles", os.path.splitext(basename)[0])
         os.makedirs(output, exist_ok=True)
-        print(f'folder: {output}')
 
         # run code
         data, cross_corr = readfile(filename, sigma=1, w=3)
         np.save(os.path.join(output, "data.npy"), data)
         np.save(os.path.join(output, "cross_corr.npy"), cross_corr)
+        print(f'readfiles done: {output}')

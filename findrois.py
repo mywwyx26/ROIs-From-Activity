@@ -25,18 +25,17 @@ from scipy import ndimage
 from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
 from scipy.spatial.distance import squareform
 from sklearn.metrics import silhouette_samples
-from skimage.filters import threshold_otsu
 
 # main function
 def findroi(data, cross_corr, filename, output="outputs"):
     os.makedirs(output, exist_ok=True)
 
-    # binarize cross corr image using Otsu's method
-    binarized = np.where(cross_corr > threshold_otsu(cross_corr), 1, 0)
+    # binarize cross corr image
+    binarized = np.where(cross_corr > np.mean(cross_corr) + np.std(cross_corr), 1, 0)
     labeled_array, num_features = ndimage.label(binarized)
     sizes = ndimage.sum(binarized, labeled_array, range(num_features + 1))
 
-    # threshold for getting rid of small rois: 30 -> 72, 40 -> 63, 50 -> 54
+    # threshold for getting rid of small rois: 50px
     mask = sizes < 50
     remove_pixel = mask[labeled_array]
     labeled_array[remove_pixel] = 0
@@ -63,17 +62,38 @@ def findroi(data, cross_corr, filename, output="outputs"):
     corrcoef_reordered = np.corrcoef(deltaf[cluster_order])
 
     # find best k using mean silhouette score
-    min_clusters = 3
+    min_clusters = 2
     best_k, best_score, best_raw_labels = min_clusters, -1, None
     all_scores = {}
-    for k in range(min_clusters, num_features - 1):
+
+    for k in range(min_clusters, int(min(25, np.ceil(num_features / 2)))):
         labels = fcluster(linkage_matrix, t=k, criterion='maxclust') - 1
         if len(np.unique(labels)) < 2:
             continue
         score = silhouette_samples(distance, labels, metric='precomputed').mean()
         all_scores[k] = score
-        if score > best_score:
-            best_score, best_k, best_raw_labels = score, k, labels
+
+    sorted_ks = sorted(all_scores.keys())
+
+    def find_peak(scores, ks, window):
+        """Return first k that is higher than `window` neighbors on each side."""
+        for i in range(window, len(ks) - window):
+            k = ks[i]
+            s = scores[k]
+            neighbors = [scores[ks[i + d]] for d in range(-window, window + 1) if d != 0]
+            if all(s > n for n in neighbors):
+                return k
+        return None
+
+    best_k = (
+        find_peak(all_scores, sorted_ks, window=3) or
+        find_peak(all_scores, sorted_ks, window=2) or
+        find_peak(all_scores, sorted_ks, window=1) or
+        max(all_scores, key=all_scores.get)
+    )
+
+    best_raw_labels = fcluster(linkage_matrix, t=best_k, criterion='maxclust') - 1
+    best_score = all_scores[best_k]
 
     # flag noise: ROIs with negative per-ROI silhouette score
     noise_threshold = 0.0
@@ -91,15 +111,15 @@ def findroi(data, cross_corr, filename, output="outputs"):
     n_clusters = next_noise_label
     noise_count = int(is_noise.sum())
 
-    print(f"\nClustering results for {filename}:")
-    print(f"  hierarchical (average linkage) + silhouette noise detection")
-    print(f"  best k={best_k} (mean silhouette={best_score:.4f})")
-    print(f"  clusters: {n_real}  |  noise ROIs: {noise_count}  |  total: {num_features}")
-    for c in range(n_real):
-        members = np.where(cluster_labels == c)[0]
-        avg_sil = per_roi_scores[members].mean() if len(members) > 0 else 0
-        print(f"  cluster {c+1}: {len(members)} ROIs, mean silhouette={avg_sil:.3f}")
-    print()
+    # sort real clusters by ROI count descending and remap labels accordingly
+    real_cluster_sizes = [(i, len(np.where(cluster_labels == i)[0])) for i in range(n_real)]
+    real_cluster_sizes.sort(key=lambda x: x[1], reverse=True)
+
+    label_remap = {}
+    for new_idx, (old_idx, _) in enumerate(real_cluster_sizes):
+        label_remap[old_idx] = new_idx
+    # noise labels stay as-is (they're already >= n_real)
+    cluster_labels = np.array([label_remap.get(l, l) for l in cluster_labels])
 
     # color coding: noise ROIs get gray
     set1 = [plt.cm.Set1(i) for i in range(9)]
@@ -111,7 +131,12 @@ def findroi(data, cross_corr, filename, output="outputs"):
         if i < n_real:
             colors.append(all_colors[i % len(all_colors)])
         else:
-            colors.append((0.7, 0.7, 0.7, 1.0))  # gray for noise
+            colors.append((0.5, 0.5, 0.5, 1.0))  # gray for noise
+
+    print(f"\nClustering results for {filename}:")
+    print(f"  hierarchical (average linkage) + silhouette noise detection")
+    print(f"  best k={best_k} (mean silhouette={best_score:.4f})")
+    print(f"  clusters: {n_real}  |  noise ROIs: {noise_count}  |  total: {num_features}\n")
 
     # silhouette plots
     fig_sil, axes_sil = plt.subplots(1, 2, figsize=(14, 4))
@@ -143,20 +168,22 @@ def findroi(data, cross_corr, filename, output="outputs"):
     fig_sil.savefig(os.path.join(output, f"{filename}_silhouette.svg"))
     plt.close(fig_sil)
 
-    # average traces of each cluster
-    plt.figure(1, figsize=(20, 15))
+    # average traces of each cluster — noise excluded, real clusters already sorted by size
     groups = [[] for _ in range(n_clusters)]
     for cluster_idx in range(n_clusters):
         roi_indices = np.where(cluster_labels == cluster_idx)[0]
-        plt.subplot(n_clusters, 1, cluster_idx + 1)
         for roi_idx in roi_indices:
             groups[cluster_idx].append(roi_idx + 1)
+
+    plt.figure(1, figsize=(20, 15))
+    for plot_idx in range(n_real):
+        roi_indices = np.where(cluster_labels == plot_idx)[0]
+        plt.subplot(n_real, 1, plot_idx + 1)
         if len(roi_indices) > 0:
             avg_trace = np.mean(deltaf[roi_indices], axis=0)
-            plt.plot(avg_trace, color=colors[cluster_idx], linewidth=1.5)
-            label = f'noise\n(n=1)' if cluster_idx >= n_real else f'C{cluster_idx+1}\n(n={len(roi_indices)})'
-            plt.ylabel(label, fontsize=7, rotation=0, labelpad=35)
-        plt.tick_params(labelbottom=(cluster_idx == n_clusters - 1))
+            plt.plot(avg_trace, color=colors[plot_idx], linewidth=1.5)
+            plt.ylabel(f'C{plot_idx+1}\n(n={len(roi_indices)})', fontsize=7, rotation=0, labelpad=35)
+        plt.tick_params(labelbottom=(plot_idx == n_real - 1))
     plt.figure(1).savefig(os.path.join(output, f"{filename}_clusters_over_time.svg"))
     plt.close(plt.figure(1))
 
@@ -185,7 +212,7 @@ def findroi(data, cross_corr, filename, output="outputs"):
 
 '''
 Takes the data.npy and cross_corr.npy files from each subfolder in readfiles and outputs the resulting
-graphsto the outputs folder. Useful to save time because the cross correlation function in readfiles.py
+graphs to the outputs folder. Useful to save time because the cross correlation function in readfiles.py
 is very slow. Requires readfiles.py to be run first, so that there are existing .npy files.
 '''
 if __name__ == "__main__":
@@ -195,8 +222,8 @@ if __name__ == "__main__":
     for foldername in subfolders:
         output = os.path.join("outputs", os.path.basename(foldername))
         os.makedirs(output, exist_ok=True)
-        print(f'folder: {output}')
 
         data = np.load(f'{foldername}/data.npy')
         cross_corr = np.load(f'{foldername}/cross_corr.npy')
         findroi(data, cross_corr, filename=os.path.basename(foldername), output=output)
+        print(f'findrois done: {output}')

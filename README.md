@@ -21,4 +21,5 @@ clustering:
 - discovered hierarchical, which worked until i redid the binarize (otsu's method to avoid hard coding)
 - discovered dbscan which seems like a better option, since it can identify noise, not pushed to git
 - while searching for more info on dbscan, i discovered hdbscan, which will hopefully work better since the arguments are automatically computed instead of manually setting a distance
-- after attempting to claude code most of it bc lazy, i am going back to hierarchical clustering bc hdbscan did not work very well either
+- i am going back to hierarchical clustering bc hdbscan did not work very well either
+- which works fine since otsu's method was bad, so we're back to mean + stdev binarize

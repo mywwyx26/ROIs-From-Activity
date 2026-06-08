@@ -48,7 +48,7 @@ def findroi(data, cross_corr, filename, output="outputs"):
         roi_trace = [ndimage.median(data[j], labels=labeled_array, index=i+1) for j in range(data.shape[0])]
         f0[i] = np.median(roi_trace)
         for j in range(data.shape[0]):
-            deltaf[i, j] = roi_trace[j] - f0[i]
+            deltaf[i, j] = (roi_trace[j] - f0[i]) / f0[i]
 
     # corrcoef and distance matrices
     corrcoef_matrix = np.corrcoef(deltaf)
@@ -75,8 +75,8 @@ def findroi(data, cross_corr, filename, output="outputs"):
 
     sorted_ks = sorted(all_scores.keys())
 
+    # Return first k that is higher than window neighbors on each side.
     def find_peak(scores, ks, window):
-        """Return first k that is higher than `window` neighbors on each side."""
         for i in range(window, len(ks) - window):
             k = ks[i]
             s = scores[k]
@@ -123,9 +123,8 @@ def findroi(data, cross_corr, filename, output="outputs"):
 
     # color coding: noise ROIs get gray
     set1 = [plt.cm.Set1(i) for i in range(9)]
-    set2 = [plt.cm.Set2(i) for i in range(8)]
     set3 = [plt.cm.Set3(i) for i in range(12)]
-    all_colors = set1 + set2 + set3
+    all_colors = set1 + set3
     colors = []
     for i in range(n_clusters):
         if i < n_real:
@@ -134,39 +133,8 @@ def findroi(data, cross_corr, filename, output="outputs"):
             colors.append((0.5, 0.5, 0.5, 1.0))  # gray for noise
 
     print(f"\nClustering results for {filename}:")
-    print(f"  hierarchical (average linkage) + silhouette noise detection")
     print(f"  best k={best_k} (mean silhouette={best_score:.4f})")
     print(f"  clusters: {n_real}  |  noise ROIs: {noise_count}  |  total: {num_features}\n")
-
-    # silhouette plots
-    fig_sil, axes_sil = plt.subplots(1, 2, figsize=(14, 4))
-    fig_sil.suptitle(f"Silhouette analysis — {filename}", fontsize=11)
-
-    ks = sorted(all_scores.keys())
-    axes_sil[0].plot(ks, [all_scores[k] for k in ks], marker='o', color="steelblue", linewidth=1.5)
-    axes_sil[0].axvline(best_k, color="tomato", linewidth=1.2, linestyle="--",
-                        label=f"best k={best_k} ({best_score:.4f})")
-    axes_sil[0].set_xlabel("k")
-    axes_sil[0].set_ylabel("Mean silhouette score")
-    axes_sil[0].set_title("Silhouette score vs k")
-    axes_sil[0].set_xticks(ks)
-    axes_sil[0].legend(fontsize=8)
-
-    roi_idx_arr = np.arange(num_features)
-    bar_colors = [colors[cluster_labels[i]][:3] for i in roi_idx_arr]
-    axes_sil[1].bar(roi_idx_arr, per_roi_scores, color=bar_colors, edgecolor="none")
-    axes_sil[1].axhline(noise_threshold, color="tomato", linewidth=1.2, linestyle="--",
-                        label=f"noise threshold ({noise_threshold})")
-    axes_sil[1].set_xlabel("ROI index")
-    axes_sil[1].set_ylabel("Silhouette score")
-    axes_sil[1].set_title("Per-ROI silhouette (gray=noise)")
-    axes_sil[1].set_xticks(roi_idx_arr)
-    axes_sil[1].set_xticklabels([str(i + 1) for i in roi_idx_arr], fontsize=6, rotation=90)
-    axes_sil[1].legend(fontsize=8)
-
-    plt.tight_layout()
-    fig_sil.savefig(os.path.join(output, f"{filename}_silhouette.svg"))
-    plt.close(fig_sil)
 
     # average traces of each cluster — noise excluded, real clusters already sorted by size
     groups = [[] for _ in range(n_clusters)]

@@ -9,10 +9,10 @@ file descriptions:
 
 hardcoded parts: (trust that these all worked best)
 - cross corr is sigma = 1 and w = 3
-- binarize threshold is mean + stdev
+- binarize threshold is 80% (keeps brightest 20%)
 - threshold for small rois is 50 pixels
 - min clusters = 2
-- max clusters = ROIs/2, capped at 25
+- max clusters = ROIs/2, capped at 20
 - noise threshold = 0.0
 - there's probably more
 

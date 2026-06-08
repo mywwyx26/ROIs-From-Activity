@@ -30,8 +30,16 @@ from sklearn.metrics import silhouette_samples
 def findroi(data, cross_corr, filename, output="outputs"):
     os.makedirs(output, exist_ok=True)
 
-    # binarize cross corr image
-    binarized = np.where(cross_corr > np.mean(cross_corr) + np.std(cross_corr), 1, 0)
+    # remove background: mask cross corr using sum of mean and std binarized images
+    mean_img = np.mean(data, axis=0)
+    std_img  = np.std(data, axis=0)
+    sum_img  = mean_img + std_img
+    bg_mask  = np.where(sum_img > np.mean(sum_img), 1, 0)
+    cross_corr = cross_corr * bg_mask
+
+    # binarize cross corr image: 80th percentile of foreground (non-zero) pixels
+    fg_pixels = cross_corr[cross_corr > 0]
+    binarized = np.where(cross_corr > np.percentile(fg_pixels, 80), 1, 0)
     labeled_array, num_features = ndimage.label(binarized)
     sizes = ndimage.sum(binarized, labeled_array, range(num_features + 1))
 
@@ -66,7 +74,7 @@ def findroi(data, cross_corr, filename, output="outputs"):
     best_k, best_score, best_raw_labels = min_clusters, -1, None
     all_scores = {}
 
-    for k in range(min_clusters, int(min(25, np.ceil(num_features / 2)))):
+    for k in range(min_clusters, int(min(20, np.ceil(num_features / 2)))):
         labels = fcluster(linkage_matrix, t=k, criterion='maxclust') - 1
         if len(np.unique(labels)) < 2:
             continue
@@ -134,7 +142,7 @@ def findroi(data, cross_corr, filename, output="outputs"):
 
     print(f"\nClustering results for {filename}:")
     print(f"  best k={best_k} (mean silhouette={best_score:.4f})")
-    print(f"  clusters: {n_real}  |  noise ROIs: {noise_count}  |  total: {num_features}\n")
+    print(f"  clusters: {n_real}  |  noise ROIs: {noise_count}  |  total: {num_features}")
 
     # average traces of each cluster — noise excluded, real clusters already sorted by size
     groups = [[] for _ in range(n_clusters)]
@@ -177,77 +185,66 @@ def findroi(data, cross_corr, filename, output="outputs"):
     plt.tick_params(axis='x', top=True, bottom=False, labeltop=True, labelbottom=False)
     plt.figure(2).savefig(os.path.join(output, f"{filename}_groups_and_matrix.svg"))
     plt.close(plt.figure(2))
-
-    # remove the bg, return the new array with bg = 0 and a list of pixels that are not bg, helper for cross corr image
-    # bg is the p percentile of darkest pixels
-    def remove_bg(array, p=30): # time: ~1.2s for 30%
-        copy = array.copy()
-        pixels = []
-        mean = np.mean(copy, axis=0)
-        mean_th = np.percentile(np.ravel(mean), p)
-        num_frames, xmax, ymax = copy.shape
-
-        for x in range(xmax):
-            for y in range(ymax):
-                if mean[x, y] < mean_th:
-                    copy[:, x, y] = 0
-                else:
-                    pixels.append((x, y))
-        return copy, pixels
-    
+ 
     # plot 3: mean, std, cross corr + otsu-binarized versions of mean and std, for reference
     mean_img = np.mean(data, axis=0)
-    std_img  = np.std(data, axis=0)
- 
-    # binarize mean and std at > mean threshold
+    # binarize mean and std at > mean threshold (same as bg_mask computation above)
     mean_bin = np.where(mean_img > np.mean(mean_img), 1, 0)
     std_bin  = np.where(std_img  > np.mean(std_img),  1, 0)
- 
-    # cross corr masked by each binarized image
-    cross_corr_mean = cross_corr * mean_bin
-    cross_corr_std  = cross_corr * std_bin
- 
-    # sum of mean and std images, and its binarization
-    sum_img = mean_img + std_img
-    sum_bin = np.where(sum_img > np.mean(sum_img), 1, 0)
- 
-    # 3 rows x 3 cols
-    fig3, axes = plt.subplots(3, 3, figsize=(18, 18))
-    fig3.subplots_adjust(hspace=0.35, wspace=0.25)
- 
-    # row 0: raw images
+
+    # cross corr masked by sum binarization (bg_mask)
+    cross_corr_masked = cross_corr * bg_mask
+
+    # cross corr binarized at 4 percentiles: all pixels vs foreground-only
+    fg_pixels = cross_corr[cross_corr > 0]  # non-zero = foreground after bg removal
+    percentiles = [70, 80, 85, 90]
+
+    def cc_bin_pct(pct, fg_only=False):
+        base = fg_pixels if fg_only else cross_corr.ravel()
+        thresh = np.percentile(base, pct)
+        return np.where(cross_corr > thresh, 1, 0)
+
+    # 4 rows x 4 cols
+    fig3, axes = plt.subplots(4, 4, figsize=(24, 22))
+    fig3.subplots_adjust(hspace=0.4, wspace=0.25)
+
+    # row 0: raw images (first 3 cols, last col blank)
     axes[0, 0].imshow(mean_img, cmap='gray')
     axes[0, 0].set_title('Mean', fontsize=12)
- 
+
     axes[0, 1].imshow(std_img, cmap='gray')
     axes[0, 1].set_title('Std Dev', fontsize=12)
- 
+
     axes[0, 2].imshow(cross_corr, cmap='gray')
-    axes[0, 2].set_title('Cross Correlation', fontsize=12)
- 
-    # row 1: binarized mean and std, cross corr masked by mean
+    axes[0, 2].set_title('Cross Correlation (bg removed)', fontsize=12)
+
+    axes[0, 3].axis('off')
+
+    # row 1: binarized mean, binarized std, cross corr masked by sum bin (last col blank)
     axes[1, 0].imshow(mean_bin, cmap='gray')
     axes[1, 0].set_title('Mean binarized (> mean)', fontsize=12)
- 
+
     axes[1, 1].imshow(std_bin, cmap='gray')
     axes[1, 1].set_title('Std Dev binarized (> mean)', fontsize=12)
- 
-    axes[1, 2].imshow(cross_corr_mean, cmap='gray')
-    axes[1, 2].set_title('Cross Corr masked by mean', fontsize=12)
- 
-    # row 2: sum image, sum binarized, cross corr masked by std
-    axes[2, 0].imshow(sum_img, cmap='gray')
-    axes[2, 0].set_title('Mean + Std Dev (sum)', fontsize=12)
- 
-    axes[2, 1].imshow(sum_bin, cmap='gray')
-    axes[2, 1].set_title('Sum binarized (> mean)', fontsize=12)
- 
-    axes[2, 2].imshow(cross_corr_std, cmap='gray')
-    axes[2, 2].set_title('Cross Corr masked by std dev', fontsize=12)
- 
+
+    axes[1, 2].imshow(cross_corr_masked, cmap='gray')
+    axes[1, 2].set_title('Cross Corr masked by sum bin (bg mask)', fontsize=12)
+
+    axes[1, 3].axis('off')
+
+    # row 2: cross corr binarized at 50/60/70/80th percentile (all pixels)
+    for col, pct in enumerate(percentiles):
+        axes[2, col].imshow(cc_bin_pct(pct), cmap='gray')
+        axes[2, col].set_title(f'Cross Corr > {pct}th pct (all)', fontsize=12)
+
+    # row 3: same percentiles but computed over foreground pixels only
+    for col, pct in enumerate(percentiles):
+        axes[3, col].imshow(cc_bin_pct(pct, fg_only=True), cmap='gray')
+        axes[3, col].set_title(f'Cross Corr > {pct}th pct (fg only)', fontsize=12)
+
     for ax in axes.flat:
         ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
- 
+
     fig3.savefig(os.path.join(output, f"{filename}_mean_std_crosscorr.svg"))
     plt.close(fig3)
 

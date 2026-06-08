@@ -178,6 +178,79 @@ def findroi(data, cross_corr, filename, output="outputs"):
     plt.figure(2).savefig(os.path.join(output, f"{filename}_groups_and_matrix.svg"))
     plt.close(plt.figure(2))
 
+    # remove the bg, return the new array with bg = 0 and a list of pixels that are not bg, helper for cross corr image
+    # bg is the p percentile of darkest pixels
+    def remove_bg(array, p=30): # time: ~1.2s for 30%
+        copy = array.copy()
+        pixels = []
+        mean = np.mean(copy, axis=0)
+        mean_th = np.percentile(np.ravel(mean), p)
+        num_frames, xmax, ymax = copy.shape
+
+        for x in range(xmax):
+            for y in range(ymax):
+                if mean[x, y] < mean_th:
+                    copy[:, x, y] = 0
+                else:
+                    pixels.append((x, y))
+        return copy, pixels
+    
+    # plot 3: mean, std, cross corr + otsu-binarized versions of mean and std, for reference
+    mean_img = np.mean(data, axis=0)
+    std_img  = np.std(data, axis=0)
+ 
+    # binarize mean and std at > mean threshold
+    mean_bin = np.where(mean_img > np.mean(mean_img), 1, 0)
+    std_bin  = np.where(std_img  > np.mean(std_img),  1, 0)
+ 
+    # cross corr masked by each binarized image
+    cross_corr_mean = cross_corr * mean_bin
+    cross_corr_std  = cross_corr * std_bin
+ 
+    # sum of mean and std images, and its binarization
+    sum_img = mean_img + std_img
+    sum_bin = np.where(sum_img > np.mean(sum_img), 1, 0)
+ 
+    # 3 rows x 3 cols
+    fig3, axes = plt.subplots(3, 3, figsize=(18, 18))
+    fig3.subplots_adjust(hspace=0.35, wspace=0.25)
+ 
+    # row 0: raw images
+    axes[0, 0].imshow(mean_img, cmap='gray')
+    axes[0, 0].set_title('Mean', fontsize=12)
+ 
+    axes[0, 1].imshow(std_img, cmap='gray')
+    axes[0, 1].set_title('Std Dev', fontsize=12)
+ 
+    axes[0, 2].imshow(cross_corr, cmap='gray')
+    axes[0, 2].set_title('Cross Correlation', fontsize=12)
+ 
+    # row 1: binarized mean and std, cross corr masked by mean
+    axes[1, 0].imshow(mean_bin, cmap='gray')
+    axes[1, 0].set_title('Mean binarized (> mean)', fontsize=12)
+ 
+    axes[1, 1].imshow(std_bin, cmap='gray')
+    axes[1, 1].set_title('Std Dev binarized (> mean)', fontsize=12)
+ 
+    axes[1, 2].imshow(cross_corr_mean, cmap='gray')
+    axes[1, 2].set_title('Cross Corr masked by mean', fontsize=12)
+ 
+    # row 2: sum image, sum binarized, cross corr masked by std
+    axes[2, 0].imshow(sum_img, cmap='gray')
+    axes[2, 0].set_title('Mean + Std Dev (sum)', fontsize=12)
+ 
+    axes[2, 1].imshow(sum_bin, cmap='gray')
+    axes[2, 1].set_title('Sum binarized (> mean)', fontsize=12)
+ 
+    axes[2, 2].imshow(cross_corr_std, cmap='gray')
+    axes[2, 2].set_title('Cross Corr masked by std dev', fontsize=12)
+ 
+    for ax in axes.flat:
+        ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
+ 
+    fig3.savefig(os.path.join(output, f"{filename}_mean_std_crosscorr.svg"))
+    plt.close(fig3)
+
 '''
 Takes the data.npy and cross_corr.npy files from each subfolder in readfiles and outputs the resulting
 graphs to the outputs folder. Useful to save time because the cross correlation function in readfiles.py

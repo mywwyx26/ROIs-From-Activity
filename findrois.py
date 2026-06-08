@@ -94,7 +94,6 @@ def findroi(data, cross_corr, filename, output="outputs"):
         return None
 
     best_k = (
-        find_peak(all_scores, sorted_ks, window=3) or
         find_peak(all_scores, sorted_ks, window=2) or
         find_peak(all_scores, sorted_ks, window=1) or
         max(all_scores, key=all_scores.get)
@@ -130,15 +129,15 @@ def findroi(data, cross_corr, filename, output="outputs"):
     cluster_labels = np.array([label_remap.get(l, l) for l in cluster_labels])
 
     # color coding: noise ROIs get gray
-    set1 = [plt.cm.Set1(i) for i in range(9)]
-    set3 = [plt.cm.Set3(i) for i in range(12)]
+    set1 = [plt.cm.Set1(i) for i in range(8)] # has 9 but last one is gray so don't use it
+    set3 = [plt.cm.Set3(i) for i in range(12)] # light gray is fine
     all_colors = set1 + set3
     colors = []
     for i in range(n_clusters):
         if i < n_real:
             colors.append(all_colors[i % len(all_colors)])
         else:
-            colors.append((0.5, 0.5, 0.5, 1.0))  # gray for noise
+            colors.append((0.3, 0.3, 0.3, 1.0))  # gray for noise
 
     print(f"\nClustering results for {filename}:")
     print(f"  best k={best_k} (mean silhouette={best_score:.4f})")
@@ -185,68 +184,6 @@ def findroi(data, cross_corr, filename, output="outputs"):
     plt.tick_params(axis='x', top=True, bottom=False, labeltop=True, labelbottom=False)
     plt.figure(2).savefig(os.path.join(output, f"{filename}_groups_and_matrix.svg"))
     plt.close(plt.figure(2))
- 
-    # plot 3: mean, std, cross corr + otsu-binarized versions of mean and std, for reference
-    mean_img = np.mean(data, axis=0)
-    # binarize mean and std at > mean threshold (same as bg_mask computation above)
-    mean_bin = np.where(mean_img > np.mean(mean_img), 1, 0)
-    std_bin  = np.where(std_img  > np.mean(std_img),  1, 0)
-
-    # cross corr masked by sum binarization (bg_mask)
-    cross_corr_masked = cross_corr * bg_mask
-
-    # cross corr binarized at 4 percentiles: all pixels vs foreground-only
-    fg_pixels = cross_corr[cross_corr > 0]  # non-zero = foreground after bg removal
-    percentiles = [70, 80, 85, 90]
-
-    def cc_bin_pct(pct, fg_only=False):
-        base = fg_pixels if fg_only else cross_corr.ravel()
-        thresh = np.percentile(base, pct)
-        return np.where(cross_corr > thresh, 1, 0)
-
-    # 4 rows x 4 cols
-    fig3, axes = plt.subplots(4, 4, figsize=(24, 22))
-    fig3.subplots_adjust(hspace=0.4, wspace=0.25)
-
-    # row 0: raw images (first 3 cols, last col blank)
-    axes[0, 0].imshow(mean_img, cmap='gray')
-    axes[0, 0].set_title('Mean', fontsize=12)
-
-    axes[0, 1].imshow(std_img, cmap='gray')
-    axes[0, 1].set_title('Std Dev', fontsize=12)
-
-    axes[0, 2].imshow(cross_corr, cmap='gray')
-    axes[0, 2].set_title('Cross Correlation (bg removed)', fontsize=12)
-
-    axes[0, 3].axis('off')
-
-    # row 1: binarized mean, binarized std, cross corr masked by sum bin (last col blank)
-    axes[1, 0].imshow(mean_bin, cmap='gray')
-    axes[1, 0].set_title('Mean binarized (> mean)', fontsize=12)
-
-    axes[1, 1].imshow(std_bin, cmap='gray')
-    axes[1, 1].set_title('Std Dev binarized (> mean)', fontsize=12)
-
-    axes[1, 2].imshow(cross_corr_masked, cmap='gray')
-    axes[1, 2].set_title('Cross Corr masked by sum bin (bg mask)', fontsize=12)
-
-    axes[1, 3].axis('off')
-
-    # row 2: cross corr binarized at 50/60/70/80th percentile (all pixels)
-    for col, pct in enumerate(percentiles):
-        axes[2, col].imshow(cc_bin_pct(pct), cmap='gray')
-        axes[2, col].set_title(f'Cross Corr > {pct}th pct (all)', fontsize=12)
-
-    # row 3: same percentiles but computed over foreground pixels only
-    for col, pct in enumerate(percentiles):
-        axes[3, col].imshow(cc_bin_pct(pct, fg_only=True), cmap='gray')
-        axes[3, col].set_title(f'Cross Corr > {pct}th pct (fg only)', fontsize=12)
-
-    for ax in axes.flat:
-        ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
-
-    fig3.savefig(os.path.join(output, f"{filename}_mean_std_crosscorr.svg"))
-    plt.close(fig3)
 
 '''
 Takes the data.npy and cross_corr.npy files from each subfolder in readfiles and outputs the resulting

@@ -24,7 +24,9 @@ if __name__ == "__main__":
 
         height, width = data.shape[1], data.shape[2]
         basename = os.path.splitext(os.path.basename(filename))[0]
-        out = cv2.VideoWriter(f'mp4s/{basename}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 30, (width, height), isColor=False)
+        
+        # original raw data is 3.75 Hz recording 
+        out = cv2.VideoWriter(f'mp4s/{basename}.mp4', cv2.VideoWriter_fourcc(*'mp4v'), 3.75, (width, height), isColor=False)
 
         for frame in data_norm:
             out.write(frame)

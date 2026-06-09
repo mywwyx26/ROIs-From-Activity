@@ -17,7 +17,7 @@ import numpy as np
 import tifffile
 from scipy import ndimage
 
-def readfile(filename, sigma = 1, w = 3):
+def readfile(filename, sigma=1, w=1):
     # each array is just a bunch of numbers in the dimensions of (time, x, y)
     data = tifffile.imread(filename)
 
@@ -95,46 +95,7 @@ if __name__ == "__main__":
         os.makedirs(output, exist_ok=True)
 
         # run code
-        '''data, cross_corr = readfile(filename, sigma=1, w=3)
+        data, cross_corr = readfile(filename, sigma=1, w=1)
         np.save(os.path.join(output, "data.npy"), data)
         np.save(os.path.join(output, "cross_corr.npy"), cross_corr)
-        print(f'readfiles done: {output}')'''
-
-        # diagnostic grid: all combinations of sigma and w
-        data = tifffile.imread(filename)
-        sigmas = [0, 1]
-        ws     = [1, 2, 3]
-        # precompute bg mask from data (same logic as findrois.py)
-        mean_img = np.mean(data, axis=0)
-        std_img  = np.std(data, axis=0)
-        sum_img  = mean_img + std_img
-        bg_mask  = np.where(sum_img > np.mean(sum_img), 1, 0)
-
-        n_combos = len(ws) * len(sigmas)
-        fig, axes = plt.subplots(n_combos, 3, figsize=(12, 4 * n_combos))
-        fig.subplots_adjust(hspace=0.4, wspace=0.25)
-        fig.suptitle(f'Cross correlation — sigma vs w: {basename}', fontsize=14)
-
-        for row_idx, (w, sigma) in enumerate([(w, s) for w in ws for s in sigmas]):
-            print(f'  computing sigma={sigma}, w={w}...')
-            _, cc = readfile(filename, sigma=sigma, w=w)
-
-            cc_masked = cc * bg_mask
-            fg_pixels = cc_masked[cc_masked > 0]
-            cc_bin    = np.where(cc_masked > np.percentile(fg_pixels, 80), 1, 0)
-
-            axes[row_idx, 0].imshow(cc, cmap='gray')
-            axes[row_idx, 0].set_title(f'sigma={sigma}, w={w} — raw CC', fontsize=10)
-
-            axes[row_idx, 1].imshow(cc_masked, cmap='gray')
-            axes[row_idx, 1].set_title(f'sigma={sigma}, w={w} — bg removed', fontsize=10)
-
-            axes[row_idx, 2].imshow(cc_bin, cmap='gray')
-            axes[row_idx, 2].set_title(f'sigma={sigma}, w={w} — binarized (80th pct fg)', fontsize=10)
-
-            for ax in axes[row_idx]:
-                ax.tick_params(left=False, bottom=False, labelleft=False, labelbottom=False)
-
-        fig.savefig(os.path.join(output, f"{os.path.splitext(basename)[0]}_sigma_w_grid.svg"))
-        plt.close(fig)
-        print(f'sigma/w grid saved: {output}')
+        print(f'readfiles done: {output}')

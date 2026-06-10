@@ -17,7 +17,7 @@ import numpy as np
 import tifffile
 from scipy import ndimage
 
-def readfile(filename, sigma=1, w=1):
+def readfile(filename, sigma=1, w=3):
     # each array is just a bunch of numbers in the dimensions of (time, x, y)
     data = tifffile.imread(filename)
 
@@ -33,7 +33,7 @@ def readfile(filename, sigma=1, w=1):
 
     # cross corr images function from https://labrigger.com/blog/2013/06/13/local-cross-corr-images/
     # very slow (w=1 takes 60s, w=2 takes 87s, w=3 takes 117s, w=4 takes 163s)
-    def cross_corr_image(tc, w=1):
+    def cross_corr_image(tc, w):
         num_frames, xmax, ymax = tc.shape
         ccimage = np.zeros((xmax, ymax))
 
@@ -95,7 +95,7 @@ if __name__ == "__main__":
         os.makedirs(output, exist_ok=True)
 
         # run code
-        data, cross_corr = readfile(filename, sigma=1, w=1)
+        data, cross_corr = readfile(filename, sigma=1, w=3)
         np.save(os.path.join(output, "data.npy"), data)
         np.save(os.path.join(output, "cross_corr.npy"), cross_corr)
         print(f'readfiles done: {output}')

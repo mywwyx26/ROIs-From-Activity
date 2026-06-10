@@ -27,7 +27,7 @@ for filename in tif_files:
     os.makedirs(output, exist_ok=True)
 
     # run code
-    data, cross_corr = readfile(filename, sigma=1, w=1)
+    data, cross_corr = readfile(filename, sigma=1, w=3)
     print(f'readfiles done: {basename}')
     findroi(data, cross_corr, filename=basename, output=output)
     print(f'findrois done: {output}')

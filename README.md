@@ -8,9 +8,9 @@ file descriptions:
     - when executed directly, takes all inputs from readfiles folder and saves .svg files to output folder
 
 hardcoded parts: (trust that these all worked best)
-- cross corr is sigma = 1 and w = 3
+- cross corr is sigma = 1 and w = (x+y)/2 * 0.005
 - binarize threshold is 80% (keeps brightest 20%)
-- threshold for small rois is 50 pixels
+- threshold for small rois is x * y * 0.0002
 - min clusters = 2
 - max clusters = ROIs/2, capped at 20
 - noise threshold = 0.0

@@ -17,12 +17,12 @@ import numpy as np
 import tifffile
 from scipy import ndimage
 
-def readfile(filename, sigma=1, w=3):
+def readfile(filename, sigma=1):
     # each array is just a bunch of numbers in the dimensions of (time, x, y)
     data = tifffile.imread(filename)
 
     # gausian blur on the whole video
-    def gaussian_blur_video(array, sigma=1): # time: 3.6s for sigma=1, 6.8s for sigma=3, 10s for sigma=5
+    def gaussian_blur_video(array, sigma): # time: 3.6s for sigma=1, 6.8s for sigma=3, 10s for sigma=5
         # initialize empty array
         blurred_array = np.zeros(array.shape)
 
@@ -32,10 +32,12 @@ def readfile(filename, sigma=1, w=3):
         return blurred_array
 
     # cross corr images function from https://labrigger.com/blog/2013/06/13/local-cross-corr-images/
-    # very slow (w=1 takes 60s, w=2 takes 87s, w=3 takes 117s, w=4 takes 163s)
-    def cross_corr_image(tc, w):
+    def cross_corr_image(tc):
         num_frames, xmax, ymax = tc.shape
         ccimage = np.zeros((xmax, ymax))
+
+        # find w based on image size
+        w = np.rint(np.mean([xmax, ymax]) * 0.005).astype(int)
 
         for x in range(w, xmax - w):
             for y in range(w, ymax - w):
@@ -69,7 +71,7 @@ def readfile(filename, sigma=1, w=3):
         return ccimage
 
     blurred_data = gaussian_blur_video(data, sigma)
-    cross_corr = cross_corr_image(blurred_data, w)
+    cross_corr = cross_corr_image(blurred_data)
     return data, cross_corr
 
 '''
@@ -95,7 +97,7 @@ if __name__ == "__main__":
         os.makedirs(output, exist_ok=True)
 
         # run code
-        data, cross_corr = readfile(filename, sigma=1, w=3)
+        data, cross_corr = readfile(filename)
         np.save(os.path.join(output, "data.npy"), data)
         np.save(os.path.join(output, "cross_corr.npy"), cross_corr)
         print(f'readfiles done: {output}')

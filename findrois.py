@@ -43,8 +43,8 @@ def findroi(data, cross_corr, filename, output="outputs"):
     labeled_array, num_features = ndimage.label(binarized)
     sizes = ndimage.sum(binarized, labeled_array, range(num_features + 1))
 
-    # threshold for getting rid of small rois: 50px
-    mask = sizes < 50
+    # threshold for getting rid of small rois
+    mask = sizes < np.rint(data.shape[1] * data.shape[2] * 0.0002)
     remove_pixel = mask[labeled_array]
     labeled_array[remove_pixel] = 0
     labeled_array, num_features = ndimage.label(labeled_array)

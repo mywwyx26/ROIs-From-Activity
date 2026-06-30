@@ -19,6 +19,7 @@ Outputs:
 '''
 
 import os
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import ndimage
@@ -28,6 +29,7 @@ from sklearn.metrics import silhouette_samples
 
 # main function
 def findroi(data, cross_corr, filename, output="outputs"):
+    start = time.perf_counter()
     os.makedirs(output, exist_ok=True)
 
     # remove background: mask cross corr using sum of mean and std binarized images
@@ -184,6 +186,8 @@ def findroi(data, cross_corr, filename, output="outputs"):
     plt.tick_params(axis='x', top=True, bottom=False, labeltop=True, labelbottom=False)
     plt.figure(2).savefig(os.path.join(output, f"{filename}_groups_and_matrix.svg"))
     plt.close(plt.figure(2))
+    end = time.perf_counter()
+    print(f'time: {(end - start):.2f} seconds')
 
 '''
 Takes the data.npy and cross_corr.npy files from each subfolder in readfiles and outputs the resulting
@@ -192,7 +196,9 @@ is very slow. Requires readfiles.py to be run first, so that there are existing 
 '''
 if __name__ == "__main__":
     print('FINDROIS only')
-    subfolders = [f.path for f in os.scandir("readfiles") if f.is_dir()]
+    subfolders = [f.path for f in os.scandir("readfiles") if f.is_dir()
+                  and os.path.exists(os.path.join(f.path, "data.npy"))
+                  and os.path.exists(os.path.join(f.path, "cross_corr.npy"))]
 
     for foldername in subfolders:
         output = os.path.join("outputs", os.path.basename(foldername))

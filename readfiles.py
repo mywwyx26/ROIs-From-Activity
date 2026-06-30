@@ -13,11 +13,14 @@ Outputs:
 '''
 
 import os
+import time
 import numpy as np
 import tifffile
 from scipy import ndimage
 
 def readfile(filename, sigma=1):
+    start = time.perf_counter()
+
     # each array is just a bunch of numbers in the dimensions of (time, x, y)
     data = tifffile.imread(filename)
 
@@ -72,6 +75,10 @@ def readfile(filename, sigma=1):
 
     blurred_data = gaussian_blur_video(data, sigma)
     cross_corr = cross_corr_image(blurred_data)
+
+    end = time.perf_counter()
+    print(f'time: {(end - start):.2f} seconds')
+
     return data, cross_corr
 
 '''
@@ -81,7 +88,6 @@ having to redo the cross correlation each time.
 '''
 if __name__ == "__main__":
     print('READFILES only')
-    import matplotlib.pyplot as plt
     input_folder = "C:\\Users\\megan\\flies\\ROIsFromActivity\\inputs"
 
     tif_files = [

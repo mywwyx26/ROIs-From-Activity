@@ -1,4 +1,8 @@
-github doesn't allow files larger than 25mb so all the other files are in google drive, this is just for the code that i need to keep updating
+github doesn't allow files larger than 25mb so all the other files are saved locally, this is just for the code that i need to keep updating
+
+how to use:
+- option 1: run main.py only
+- option 2: run readfiles.py, wait for it to finish, then run findrois.py
 
 file descriptions:
 - main.py: runs readfiles and findrois on all files in the inputs folder, saves .svg files to output folder

@@ -27,6 +27,8 @@ from scipy.cluster.hierarchy import linkage, leaves_list, fcluster
 from scipy.spatial.distance import squareform
 from sklearn.metrics import silhouette_samples
 
+SAMPLE_RATE_HZ = 3.75  # all recordings were captured at 3.75 Hz
+
 # main function
 def findroi(data, cross_corr, filename, output="outputs"):
     start = time.perf_counter()
@@ -152,15 +154,18 @@ def findroi(data, cross_corr, filename, output="outputs"):
         for roi_idx in roi_indices:
             groups[cluster_idx].append(roi_idx + 1)
 
+    t = np.arange(deltaf.shape[1]) / SAMPLE_RATE_HZ
+
     plt.figure(1, figsize=(20, 15))
     for plot_idx in range(n_real):
         roi_indices = np.where(cluster_labels == plot_idx)[0]
         plt.subplot(n_real, 1, plot_idx + 1)
         if len(roi_indices) > 0:
             avg_trace = np.mean(deltaf[roi_indices], axis=0)
-            plt.plot(avg_trace, color=colors[plot_idx], linewidth=1.5)
+            plt.plot(t, avg_trace, color=colors[plot_idx], linewidth=1.5)
             plt.ylabel(f'C{plot_idx+1}\n(n={len(roi_indices)})', fontsize=7, rotation=0, labelpad=35)
         plt.tick_params(labelbottom=(plot_idx == n_real - 1))
+    plt.xlabel('time (s)')
     plt.figure(1).savefig(os.path.join(output, f"{filename}_clusters_over_time.svg"))
     plt.close(plt.figure(1))
 
